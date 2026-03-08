@@ -1,0 +1,8 @@
+1.本项目需要开发一套基于flutter框架的app，能跨平台在android和ios平台正常运行，当前子目录ui-images文件夹内是本项目全部ui设计图，assets中是图标或者背景图
+2.login.jpg是应用的登录页，assets/login_background_top.jpg是登录页顶部的背景图，登录页先开发用户名和密码都输入admin点击登录进入
+3.main.jpg是登录进入的主页面，展示最近的会话列表，按照时间倒序排列，支持全局的输入搜索，点击右上角的“+”号按钮可以创建新的会话，底部有“首页”、“知识库”、“我的”三个入口
+4.chat.jpg是和模型的对话页面，用户输入内容靠右，模型输出内容靠左，支持文本和语言输入，摄像头拍照输入图片等功能，点击“+”按钮出现chat-input.jpg所示效果，
+5.如chat-action.jpg图片所示，长按选中模型的某段回答消息，可以弹出操作框，”打标签“、”收藏“和”导出“，选择”打标签“择出现chat-tag.jpg图所示效果，点击输入框选择标签则进入chat-tag-select.jpg图所示效果
+6.点击底部“我的”进入mine.jpg图示页面，点击图中”我的收藏“进入my-favorites.jpg页面展示收藏的会话列表
+7.点击底部”知识库“进入knowledge.jpg页面所示，点击”文件夹“进入folder-list.jpg图所示效果，点击文件夹中目录进入file-list.jpg文件列表页；点进”标签“进入tag-list.jpg标签列表页，长按选中其中的某个标签可以编辑或者删除如tag-select.jpg图所示,点击编辑进入tag-edit.jpg图所示,点击右上角的”+“可以新增标签如tag-insert.jpg所示
+请按照顺序依次完成以上模块开发
