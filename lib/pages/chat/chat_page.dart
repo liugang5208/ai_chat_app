@@ -18,14 +18,17 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
+  final TextEditingController _titleController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _showInputPanel = false;
   bool _isStreaming = false;
   int? _streamingMsgId;
+  bool _isEditingTitle = false;
 
   @override
   void dispose() {
     _controller.dispose();
+    _titleController.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -40,11 +43,66 @@ class _ChatPageState extends State<ChatPage> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.remove, size: 28),
+          icon: const Icon(Icons.menu, size: 24),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
         centerTitle: true,
-        title: const Text('对话', style: TextStyle(fontWeight: FontWeight.w700)),
+        title: _isEditingTitle
+            ? TextField(
+                controller: _titleController,
+                autofocus: true,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1F2430),
+                ),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onSubmitted: (String value) {
+                  final String normalized = value.trim();
+                  if (normalized.isNotEmpty) {
+                    AppStateScope.of(context).renameConversation(
+                      widget.conversationId,
+                      normalized,
+                    );
+                  }
+                  setState(() => _isEditingTitle = false);
+                },
+                onTapOutside: (_) {
+                  final String normalized = _titleController.text.trim();
+                  if (normalized.isNotEmpty) {
+                    AppStateScope.of(context).renameConversation(
+                      widget.conversationId,
+                      normalized,
+                    );
+                  }
+                  setState(() => _isEditingTitle = false);
+                },
+              )
+            : GestureDetector(
+                onTap: () {
+                  _titleController.text = conversation.title;
+                  setState(() => _isEditingTitle = true);
+                },
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Flexible(
+                      child: Text(
+                        conversation.title,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.edit_outlined, size: 15, color: Color(0xFF9FA5B3)),
+                  ],
+                ),
+              ),
         actions: <Widget>[
           IconButton(
             onPressed: () => setState(() => _showInputPanel = !_showInputPanel),
@@ -76,84 +134,110 @@ class _ChatPageState extends State<ChatPage> {
                     ? Colors.white
                     : const Color(0xFF1F2633);
 
-                return Align(
-                  alignment: fromUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: GestureDetector(
-                      onLongPress: fromUser
-                          ? null
-                          : () => _onLongPressAssistantMessage(
-                              app,
-                              conversation.id,
-                              message,
-                            ),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.78,
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: fromUser
+                        ? MainAxisAlignment.end
+                        : MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      if (!fromUser) ...<Widget>[
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFFEEF3FF),
+                          child: const Icon(
+                            Icons.auto_awesome,
+                            size: 16,
+                            color: Color(0xFF4C84FF),
+                          ),
                         ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 9,
+                        const SizedBox(width: 8),
+                      ],
+                      GestureDetector(
+                        onLongPress: fromUser
+                            ? null
+                            : () => _onLongPressAssistantMessage(
+                                  app,
+                                  conversation.id,
+                                  message,
+                                ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.68,
                           ),
-                          decoration: BoxDecoration(
-                            color: bubbleColor,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              if (!fromUser &&
-                                  message.id == _streamingMsgId &&
-                                  message.text.isEmpty)
-                                const ThinkingDots()
-                              else
-                                Text(
-                                  message.text,
-                                  style: TextStyle(
-                                    color: textColor,
-                                    fontSize: 15,
-                                    height: 1.55,
-                                    fontWeight: FontWeight.w600,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 9,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bubbleColor,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                if (!fromUser &&
+                                    message.id == _streamingMsgId &&
+                                    message.text.isEmpty)
+                                  const ThinkingDots()
+                                else
+                                  Text(
+                                    message.text,
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontSize: 15,
+                                      height: 1.55,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                ),
-                              if (message.tags.isNotEmpty) ...<Widget>[
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 6,
-                                  children: message.tags
-                                      .map(
-                                        (String tag) => Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 2,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFE9F1FF),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
+                                if (message.tags.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 6,
+                                    children: message.tags
+                                        .map(
+                                          (String tag) => Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFE9F1FF),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              tag,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: Color(0xFF4C84FF),
+                                              ),
                                             ),
                                           ),
-                                          child: Text(
-                                            tag,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: Color(0xFF4C84FF),
-                                            ),
-                                          ),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
+                                        )
+                                        .toList(),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      if (fromUser) ...<Widget>[
+                        const SizedBox(width: 8),
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: const Color(0xFF4C84FF),
+                          child: const Icon(
+                            Icons.person,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 );
               },
@@ -392,16 +476,21 @@ class _ChatPageState extends State<ChatPage> {
         config: config,
         history: history,
       )) {
+        if (!mounted) break;
         app.appendToMessage(conversationId, streamMsgId, chunk);
         _scrollToBottom();
       }
     } catch (e) {
-      app.updateMessageText(conversationId, streamMsgId, '请求失败：$e');
+      if (mounted) {
+        app.updateMessageText(conversationId, streamMsgId, '请求失败：$e');
+      }
     } finally {
-      setState(() {
-        _isStreaming = false;
-        _streamingMsgId = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isStreaming = false;
+          _streamingMsgId = null;
+        });
+      }
       app.saveConversations();
     }
   }

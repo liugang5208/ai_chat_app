@@ -200,6 +200,16 @@ class AppState extends ChangeNotifier {
     ConversationStorage.save(conversations, _nextConvId, _nextMsgId);
   }
 
+  void renameConversation(int conversationId, String title) {
+    final String normalized = title.trim();
+    if (normalized.isEmpty) return;
+    final Conversation c = getConversationById(conversationId);
+    c.title = normalized;
+    c.updatedAt = DateTime.now();
+    notifyListeners();
+    ConversationStorage.save(conversations, _nextConvId, _nextMsgId);
+  }
+
   void assignTagToMessage({
     required int conversationId,
     required int messageId,
