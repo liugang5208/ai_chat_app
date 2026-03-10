@@ -42,9 +42,9 @@ class _ChatPageState extends State<ChatPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leadingWidth: 210,
+        leadingWidth: 240,
         leading: Padding(
-          padding: const EdgeInsets.only(left: 10),
+          padding: const EdgeInsets.only(left: 16),
           child: Row(
             children: <Widget>[
               InkWell(
@@ -58,20 +58,37 @@ class _ChatPageState extends State<ChatPage> {
                     shape: BoxShape.circle,
                     boxShadow: <BoxShadow>[
                       BoxShadow(
-                        color: Color(0x11000000),
-                        blurRadius: 10,
+                        color: Color(0x0A000000),
+                        blurRadius: 8,
                         offset: Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.menu,
-                    size: 20,
-                    color: Color(0xFF3A3F4B),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: <Widget>[
+                      const Icon(
+                        Icons.menu,
+                        size: 20,
+                        color: Color(0xFF3A3F4B),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF5252),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
                   onTap: () => _showModelSelector(context, app),
@@ -79,29 +96,44 @@ class _ChatPageState extends State<ChatPage> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Text(
-                        app.activeVendor != null
-                            ? (app.modelConfigs[app.activeVendor]?.model ??
-                                  '未配置')
-                            : 'Yuanbao',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1F2430),
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            app.activeVendor ?? 'Yuanbao',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF1D1F24),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 1),
-                      const Text(
-                        '点击切换模型 >',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF8C93A3),
-                          fontWeight: FontWeight.w500,
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          Text(
+                            app.activeVendor != null
+                                ? (app.modelConfigs[app.activeVendor]?.model ??
+                                    'DeepSeek Thinking')
+                                : 'DeepSeek Thinking',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Color(0xFF9197A5),
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: 14,
+                            color: Color(0xFF9197A5),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -110,7 +142,7 @@ class _ChatPageState extends State<ChatPage> {
             ],
           ),
         ),
-        centerTitle: true,
+        centerTitle: false,
         title: _isEditingTitle
             ? TextField(
                 controller: _titleController,
@@ -169,12 +201,7 @@ class _ChatPageState extends State<ChatPage> {
                   ],
                 ),
               ),
-        actions: <Widget>[
-          IconButton(
-            onPressed: () => setState(() => _showInputPanel = !_showInputPanel),
-            icon: const Icon(Icons.add_circle, color: Color(0xFF4C84FF)),
-          ),
-        ],
+        actions: const <Widget>[],
       ),
       body: Column(
         children: <Widget>[
@@ -549,106 +576,179 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _showModelSelector(BuildContext context, AppState app) {
-    if (app.modelConfigs.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请先在"我的"页面配置模型提供方')));
-      return;
-    }
+    String? hoveredVendor;
+
     showDialog<void>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.08),
+      barrierColor: Colors.transparent,
       builder: (BuildContext dialogContext) {
-        return Stack(
-          children: <Widget>[
-            Positioned(
-              top: 84,
-              left: 58,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: 196,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x19000000),
-                        blurRadius: 20,
-                        offset: Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      ...app.modelConfigs.entries.map((
-                        MapEntry<String, ChatConfig> e,
-                      ) {
-                        final bool isActive = app.activeVendor == e.key;
-                        return InkWell(
-                          onTap: () {
-                            app.setActiveVendor(e.key);
-                            Navigator.of(dialogContext).pop();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
-                            child: Row(
-                              children: <Widget>[
-                                SizedBox(
-                                  width: 18,
-                                  child: isActive
-                                      ? const Icon(
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            final List<String> vendors = app.modelConfigs.keys.toList();
+            return Stack(
+              children: <Widget>[
+                Positioned(
+                  top: 60,
+                  left: 20,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        // First level: Vendors
+                        Container(
+                          width: 180,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: const <BoxShadow>[
+                              BoxShadow(
+                                color: Color(0x1A000000),
+                                blurRadius: 20,
+                                offset: Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: vendors.map((String vendor) {
+                              final bool isSelected = app.activeVendor == vendor;
+                              final bool isHovered = hoveredVendor == vendor;
+                              return InkWell(
+                                onHover: (bool value) {
+                                  if (value) setState(() => hoveredVendor = vendor);
+                                },
+                                onTap: () {
+                                  setState(() => hoveredVendor = vendor);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 10,
+                                  ),
+                                  color: isHovered
+                                      ? const Color(0xFFF5F7FA)
+                                      : Colors.transparent,
+                                  child: Row(
+                                    children: <Widget>[
+                                      if (isSelected)
+                                        const Icon(
                                           Icons.check,
                                           size: 16,
-                                          color: Color(0xFF1F2430),
+                                          color: Color(0xFF1D1F24),
                                         )
-                                      : const SizedBox.shrink(),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        e.value.model,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 19,
-                                          fontWeight: FontWeight.w600,
-                                          color: Color(0xFF1F2430),
+                                      else
+                                        const SizedBox(width: 16),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          vendor,
+                                          style: const TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w500,
+                                            color: Color(0xFF1D1F24),
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        e.key,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          color: Color(0xFFA0A6B3),
-                                          fontWeight: FontWeight.w500,
-                                        ),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        size: 16,
+                                        color: Color(0xFF9197A5),
                                       ),
                                     ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                        if (hoveredVendor != null &&
+                            app.modelConfigs.containsKey(hoveredVendor!)) ...<Widget>[
+                          const SizedBox(width: 8),
+                          // Second level: Models for the selected vendor
+                          Container(
+                            width: 200,
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: const <BoxShadow>[
+                                BoxShadow(
+                                  color: Color(0x1A000000),
+                                  blurRadius: 20,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: <Widget>[
+                                InkWell(
+                                  onTap: () {
+                                    app.setActiveVendor(hoveredVendor!);
+                                    Navigator.of(dialogContext).pop();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 12,
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                app.modelConfigs[hoveredVendor!]!
+                                                    .model,
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Color(0xFF1D1F24),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              const Text(
+                                                'Default Model',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF9197A5),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (app.activeVendor == hoveredVendor)
+                                          const Icon(
+                                            Icons.check,
+                                            size: 16,
+                                            color: Color(0xFF1D1F24),
+                                          ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      }),
-                    ],
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  void _showVendorList(BuildContext context, AppState app) {
+    // This method is no longer needed as its functionality is merged into _showModelSelector
   }
 
   Future<void> _onLongPressAssistantMessage(
