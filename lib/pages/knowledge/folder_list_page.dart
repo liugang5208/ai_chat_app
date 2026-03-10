@@ -1,16 +1,28 @@
 import 'package:flutter/material.dart';
 import '../../app_state.dart';
-import '../../models/tag_item.dart';
-import '../../models/knowledge.dart';
+import '../../models/conversation.dart';
 import 'file_list_page.dart';
 
-class FolderListPage extends StatelessWidget {
+class FolderListPage extends StatefulWidget {
   const FolderListPage({super.key});
+
+  @override
+  State<FolderListPage> createState() => _FolderListPageState();
+}
+
+class _FolderListPageState extends State<FolderListPage> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
     final AppState app = AppStateScope.of(context);
-    final List<TagItem> tagDirs = app.tags;
+    final String q = _query.trim().toLowerCase();
+    final List<Conversation> subDirs = app.conversationsSorted().where((
+      Conversation item,
+    ) {
+      if (q.isEmpty) return true;
+      return item.title.toLowerCase().contains(q);
+    }).toList();
     return Scaffold(
       appBar: AppBar(
         title: const Text('文件夹'),
@@ -27,6 +39,7 @@ class FolderListPage extends StatelessWidget {
             child: SizedBox(
               height: 44,
               child: TextField(
+                onChanged: (String value) => setState(() => _query = value),
                 style: const TextStyle(fontSize: 16, color: Color(0xFF1D2330)),
                 decoration: InputDecoration(
                   hintText: '请输入',
@@ -57,7 +70,7 @@ class FolderListPage extends StatelessWidget {
           ),
           Expanded(
             child: ListView.separated(
-              itemCount: tagDirs.length,
+              itemCount: subDirs.length,
               separatorBuilder: (BuildContext context, int index) =>
                   const Divider(
                     height: 1,
@@ -65,25 +78,14 @@ class FolderListPage extends StatelessWidget {
                     indent: 84,
                   ),
               itemBuilder: (BuildContext context, int index) {
-                final TagItem tagDir = tagDirs[index];
-                final KnowledgeFolder? ownerFolder = app.knowledgeFolders
-                    .cast<KnowledgeFolder?>()
-                    .firstWhere(
-                      (KnowledgeFolder? folder) =>
-                          folder != null &&
-                          folder.subdirectories.any(
-                            (TagItem t) => t.name == tagDir.name,
-                          ),
-                      orElse: () => null,
-                    );
+                final Conversation subDir = subDirs[index];
                 return InkWell(
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
                         builder: (_) => FileListPage(
-                          title: tagDir.name,
-                          files: ownerFolder?.files,
-                          subdirectories: <TagItem>[tagDir],
+                          title: subDir.title,
+                          conversationId: subDir.id,
                         ),
                       ),
                     );
@@ -103,7 +105,7 @@ class FolderListPage extends StatelessWidget {
                         const SizedBox(width: 14),
                         Expanded(
                           child: Text(
-                            tagDir.name,
+                            subDir.title,
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,

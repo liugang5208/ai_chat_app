@@ -13,9 +13,19 @@ class KnowledgeFolder {
 }
 
 class DocFile {
-  DocFile({required this.title, required this.preview, required this.timeText});
+  DocFile({
+    required this.title,
+    required this.preview,
+    required this.timeText,
+    this.detail,
+    this.createdAt,
+    this.tagName,
+  });
 
   final String title;
   final String preview;
   final String timeText;
+  final String? detail;
+  final DateTime? createdAt;
+  final String? tagName;
 }

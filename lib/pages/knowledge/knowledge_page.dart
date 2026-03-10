@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'folder_list_page.dart';
 import 'tag_list_page.dart';
-import 'file_list_page.dart';
+import 'file_preview_page.dart';
 
 class KnowledgePage extends StatefulWidget {
   const KnowledgePage({super.key});
@@ -83,7 +83,7 @@ class _KnowledgePageState extends State<KnowledgePage> {
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
-                  builder: (_) => const FileListPage(title: '文件名称'),
+                  builder: (_) => const FilePreviewPage(),
                 ),
               );
             },

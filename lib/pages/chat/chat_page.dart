@@ -42,9 +42,73 @@ class _ChatPageState extends State<ChatPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu, size: 24),
-          onPressed: () => Navigator.of(context).maybePop(),
+        leadingWidth: 210,
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 10),
+          child: Row(
+            children: <Widget>[
+              InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: () => Navigator.of(context).maybePop(),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x11000000),
+                        blurRadius: 10,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.menu,
+                    size: 20,
+                    color: Color(0xFF3A3F4B),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showModelSelector(context, app),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        app.activeVendor != null
+                            ? (app.modelConfigs[app.activeVendor]?.model ??
+                                  '未配置')
+                            : 'Yuanbao',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF1F2430),
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      const Text(
+                        '点击切换模型 >',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF8C93A3),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         centerTitle: true,
         title: _isEditingTitle
@@ -65,20 +129,18 @@ class _ChatPageState extends State<ChatPage> {
                 onSubmitted: (String value) {
                   final String normalized = value.trim();
                   if (normalized.isNotEmpty) {
-                    AppStateScope.of(context).renameConversation(
-                      widget.conversationId,
-                      normalized,
-                    );
+                    AppStateScope.of(
+                      context,
+                    ).renameConversation(widget.conversationId, normalized);
                   }
                   setState(() => _isEditingTitle = false);
                 },
                 onTapOutside: (_) {
                   final String normalized = _titleController.text.trim();
                   if (normalized.isNotEmpty) {
-                    AppStateScope.of(context).renameConversation(
-                      widget.conversationId,
-                      normalized,
-                    );
+                    AppStateScope.of(
+                      context,
+                    ).renameConversation(widget.conversationId, normalized);
                   }
                   setState(() => _isEditingTitle = false);
                 },
@@ -99,7 +161,11 @@ class _ChatPageState extends State<ChatPage> {
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.edit_outlined, size: 15, color: Color(0xFF9FA5B3)),
+                    const Icon(
+                      Icons.edit_outlined,
+                      size: 15,
+                      color: Color(0xFF9FA5B3),
+                    ),
                   ],
                 ),
               ),
@@ -158,10 +224,10 @@ class _ChatPageState extends State<ChatPage> {
                         onLongPress: fromUser
                             ? null
                             : () => _onLongPressAssistantMessage(
-                                  app,
-                                  conversation.id,
-                                  message,
-                                ),
+                                app,
+                                conversation.id,
+                                message,
+                              ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.68,
@@ -275,32 +341,6 @@ class _ChatPageState extends State<ChatPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          GestureDetector(
-            onTap: () => _showModelSelector(context, app),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEEF3FF),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  const Icon(Icons.auto_awesome, size: 14, color: Color(0xFF4C84FF)),
-                  const SizedBox(width: 4),
-                  Text(
-                    app.activeVendor != null
-                        ? (app.modelConfigs[app.activeVendor]?.model ?? '未配置')
-                        : '选择模型',
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF4C84FF)),
-                  ),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.expand_more, size: 14, color: Color(0xFF4C84FF)),
-                ],
-              ),
-            ),
-          ),
           Row(
             children: <Widget>[
               IconButton(
@@ -318,7 +358,10 @@ class _ChatPageState extends State<ChatPage> {
                   controller: _controller,
                   decoration: const InputDecoration(
                     hintText: '发消息或者按住说话',
-                    hintStyle: TextStyle(color: Color(0xFFB0B5C2), fontSize: 15),
+                    hintStyle: TextStyle(
+                      color: Color(0xFFB0B5C2),
+                      fontSize: 15,
+                    ),
                     border: InputBorder.none,
                   ),
                   onSubmitted: (_) => _sendMessage(app, conversation.id),
@@ -326,13 +369,11 @@ class _ChatPageState extends State<ChatPage> {
               ),
               IconButton(
                 onPressed: () => _sendMessage(app, conversation.id),
-                icon: const Icon(
-                  Icons.send,
-                  color: Color(0xFF4C84FF),
-                ),
+                icon: const Icon(Icons.send, color: Color(0xFF4C84FF)),
               ),
               IconButton(
-                onPressed: () => setState(() => _showInputPanel = !_showInputPanel),
+                onPressed: () =>
+                    setState(() => _showInputPanel = !_showInputPanel),
                 icon: const Icon(
                   Icons.add_circle_outline,
                   color: Color(0xFF4A4F5D),
@@ -509,47 +550,102 @@ class _ChatPageState extends State<ChatPage> {
 
   void _showModelSelector(BuildContext context, AppState app) {
     if (app.modelConfigs.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先在"我的"页面配置模型提供方')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先在"我的"页面配置模型提供方')));
       return;
     }
-    showModalBottomSheet<void>(
+    showDialog<void>(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (BuildContext ctx) {
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 14, 16, 8),
-                child: Text(
-                  '选择模型',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      barrierColor: Colors.black.withValues(alpha: 0.08),
+      builder: (BuildContext dialogContext) {
+        return Stack(
+          children: <Widget>[
+            Positioned(
+              top: 84,
+              left: 58,
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 196,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: const <BoxShadow>[
+                      BoxShadow(
+                        color: Color(0x19000000),
+                        blurRadius: 20,
+                        offset: Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      ...app.modelConfigs.entries.map((
+                        MapEntry<String, ChatConfig> e,
+                      ) {
+                        final bool isActive = app.activeVendor == e.key;
+                        return InkWell(
+                          onTap: () {
+                            app.setActiveVendor(e.key);
+                            Navigator.of(dialogContext).pop();
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
+                            child: Row(
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 18,
+                                  child: isActive
+                                      ? const Icon(
+                                          Icons.check,
+                                          size: 16,
+                                          color: Color(0xFF1F2430),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: <Widget>[
+                                      Text(
+                                        e.value.model,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 19,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2430),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        e.key,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFFA0A6B3),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
-              const Divider(height: 1),
-              ...app.modelConfigs.entries.map((MapEntry<String, ChatConfig> e) {
-                final bool isActive = app.activeVendor == e.key;
-                return ListTile(
-                  leading: const Icon(Icons.auto_awesome_outlined),
-                  title: Text(e.value.model),
-                  subtitle: Text(e.key),
-                  trailing: isActive
-                      ? const Icon(Icons.check_circle, color: Color(0xFF4C84FF))
-                      : null,
-                  onTap: () {
-                    app.setActiveVendor(e.key);
-                    Navigator.of(ctx).pop();
-                  },
-                );
-              }),
-              const SizedBox(height: 8),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -599,10 +695,14 @@ class _ChatPageState extends State<ChatPage> {
     if (action == 'tag') {
       await _showTagSheet(context, conversationId, message.id);
     } else if (action == 'favorite') {
-      app.toggleConversationFavorite(conversationId);
+      app.saveAssistantMessageToKnowledge(
+        conversationId: conversationId,
+        messageId: message.id,
+        fromFavorite: true,
+      );
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已收藏会话')));
+      ).showSnackBar(const SnackBar(content: Text('已收藏并加入文件夹')));
     } else {
       ScaffoldMessenger.of(
         context,
@@ -712,6 +812,11 @@ class _ChatPageState extends State<ChatPage> {
                             );
                             if (selectedTag.isNotEmpty && exists) {
                               latestApp.assignTagToMessage(
+                                conversationId: conversationId,
+                                messageId: messageId,
+                                tagName: selectedTag,
+                              );
+                              latestApp.saveAssistantMessageToKnowledge(
                                 conversationId: conversationId,
                                 messageId: messageId,
                                 tagName: selectedTag,

@@ -6,6 +6,7 @@ import 'models/tag_item.dart';
 import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
 import 'storage/model_config_storage.dart';
+import 'utils/date_utils.dart';
 
 class AppStateScope extends InheritedNotifier<AppState> {
   const AppStateScope({
@@ -22,17 +23,34 @@ class AppStateScope extends InheritedNotifier<AppState> {
   }
 }
 
+class FavoriteEntry {
+  FavoriteEntry({
+    required this.conversationId,
+    required this.title,
+    required this.preview,
+    required this.detail,
+    required this.createdAt,
+  });
+
+  final int conversationId;
+  final String title;
+  final String preview;
+  final String detail;
+  final DateTime createdAt;
+}
+
 class AppState extends ChangeNotifier {
   AppState({
     required this.conversations,
     required this.knowledgeFolders,
+    required this.tags,
     Map<String, ChatConfig>? modelConfigs,
     this.activeVendor,
     int nextConvId = 1,
     int nextMsgId = 1,
-  })  : modelConfigs = modelConfigs ?? <String, ChatConfig>{},
-        _nextConvId = nextConvId,
-        _nextMsgId = nextMsgId;
+  }) : modelConfigs = modelConfigs ?? <String, ChatConfig>{},
+       _nextConvId = nextConvId,
+       _nextMsgId = nextMsgId;
 
   int _nextConvId;
   int _nextMsgId;
@@ -43,17 +61,15 @@ class AppState extends ChangeNotifier {
   int _allocMsgId() => _nextMsgId++;
   final List<Conversation> conversations;
   final List<KnowledgeFolder> knowledgeFolders;
-  List<TagItem> get tags {
-    final Map<String, TagItem> merged = <String, TagItem>{};
-    for (final KnowledgeFolder folder in knowledgeFolders) {
-      for (final TagItem tag in folder.subdirectories) {
-        merged.putIfAbsent(
-          tag.name,
-          () => TagItem(id: tag.name, name: tag.name, color: tag.color),
-        );
-      }
-    }
-    return merged.values.toList();
+  final List<TagItem> tags;
+  List<TagItem> get conversationSubdirectories {
+    return conversationsSorted().map((Conversation c) {
+      return TagItem(
+        id: 'conv_${c.id}',
+        name: c.title,
+        color: const Color(0xFFF5F6FB),
+      );
+    }).toList();
   }
 
   factory AppState.initial({
@@ -70,9 +86,10 @@ class AppState extends ChangeNotifier {
         KnowledgeFolder(
           name: '默认',
           files: _seedFiles(),
-          subdirectories: tags,
+          subdirectories: <TagItem>[],
         ),
       ],
+      tags: tags,
       modelConfigs: modelConfigs,
       activeVendor: activeVendor,
       nextConvId: nextConvId,
@@ -81,23 +98,7 @@ class AppState extends ChangeNotifier {
   }
 
   static List<DocFile> _seedFiles() {
-    return <DocFile>[
-      DocFile(
-        title: '广州旅游攻略1',
-        preview: '我现在要帮你把搜索图库的手柄变成白色我现在要帮你把搜索图库的手柄变成白...',
-        timeText: '1月6日 12:09',
-      ),
-      DocFile(
-        title: '广州旅游要去这些地方',
-        preview: '我现在要帮你把搜索图库的手柄变成白色',
-        timeText: '1月6日 12:09',
-      ),
-      DocFile(
-        title: '你还没去过广州吗',
-        preview: '我现在要帮你把搜索图库的手柄变成白色我现在要帮你把搜索图库的手柄变成白...',
-        timeText: '1月6日 12:09',
-      ),
-    ];
+    return <DocFile>[];
   }
 
   List<Conversation> conversationsSorted({String query = ''}) {
@@ -120,6 +121,29 @@ class AppState extends ChangeNotifier {
     items.sort(
       (Conversation a, Conversation b) => b.updatedAt.compareTo(a.updatedAt),
     );
+    return items;
+  }
+
+  List<FavoriteEntry> favoriteEntries() {
+    final List<FavoriteEntry> items = <FavoriteEntry>[];
+    for (final Conversation c in conversations) {
+      for (final ChatMessage m in c.messages) {
+        final MessageKnowledgeEntry? entry = m.knowledgeEntry;
+        if (entry == null || !entry.fromFavorite) continue;
+        items.add(
+          FavoriteEntry(
+            conversationId: c.id,
+            title: entry.question,
+            preview: _buildPreview(entry.answer),
+            detail: entry.answer,
+            createdAt: entry.collectedAt,
+          ),
+        );
+      }
+    }
+    items.sort((FavoriteEntry a, FavoriteEntry b) {
+      return b.createdAt.compareTo(a.createdAt);
+    });
     return items;
   }
 
@@ -163,12 +187,7 @@ class AppState extends ChangeNotifier {
     final Conversation c = getConversationById(conversationId);
     final int msgId = _allocMsgId();
     c.messages.add(
-      ChatMessage(
-        id: msgId,
-        fromUser: true,
-        text: text,
-        time: DateTime.now(),
-      ),
+      ChatMessage(id: msgId, fromUser: true, text: text, time: DateTime.now()),
     );
     c.preview = text;
     c.updatedAt = DateTime.now();
@@ -180,12 +199,7 @@ class AppState extends ChangeNotifier {
     final Conversation c = getConversationById(conversationId);
     final int msgId = _allocMsgId();
     c.messages.add(
-      ChatMessage(
-        id: msgId,
-        fromUser: false,
-        text: text,
-        time: DateTime.now(),
-      ),
+      ChatMessage(id: msgId, fromUser: false, text: text, time: DateTime.now()),
     );
     c.preview = text;
     c.updatedAt = DateTime.now();
@@ -226,17 +240,96 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  void saveAssistantMessageToKnowledge({
+    required int conversationId,
+    required int messageId,
+    String? tagName,
+    bool fromFavorite = false,
+  }) {
+    final Conversation c = getConversationById(conversationId);
+    final int messageIndex = c.messages.indexWhere(
+      (ChatMessage item) => item.id == messageId,
+    );
+    if (messageIndex < 0) return;
+    final ChatMessage target = c.messages[messageIndex];
+    if (target.fromUser) return;
+
+    final String answer = target.text.trim();
+    if (answer.isEmpty) return;
+
+    final String question = _findLatestUserQuestionBefore(
+      c.messages,
+      messageIndex,
+      fallback: c.title,
+    );
+    final MessageKnowledgeEntry? oldEntry = target.knowledgeEntry;
+    target.knowledgeEntry = MessageKnowledgeEntry(
+      question: question,
+      answer: answer,
+      collectedAt: DateTime.now(),
+      tagName: tagName ?? oldEntry?.tagName,
+      fromFavorite: fromFavorite || (oldEntry?.fromFavorite ?? false),
+    );
+
+    notifyListeners();
+    ConversationStorage.save(conversations, _nextConvId, _nextMsgId);
+  }
+
+  List<DocFile> conversationKnowledgeFiles(int conversationId) {
+    final Conversation c = getConversationById(conversationId);
+    final List<DocFile> files = c.messages
+        .where((ChatMessage m) => m.knowledgeEntry != null)
+        .map((ChatMessage m) {
+          final MessageKnowledgeEntry entry = m.knowledgeEntry!;
+          return DocFile(
+            title: entry.question,
+            preview: _buildPreview(entry.answer),
+            timeText: friendlyDate(entry.collectedAt),
+            detail: entry.answer,
+            createdAt: entry.collectedAt,
+            tagName: entry.tagName,
+          );
+        })
+        .toList();
+    files.sort((DocFile a, DocFile b) {
+      final DateTime aTime =
+          a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime bTime =
+          b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return bTime.compareTo(aTime);
+    });
+    return files;
+  }
+
+  String _findLatestUserQuestionBefore(
+    List<ChatMessage> messages,
+    int index, {
+    required String fallback,
+  }) {
+    for (int i = index - 1; i >= 0; i--) {
+      final ChatMessage message = messages[i];
+      if (message.fromUser && message.text.trim().isNotEmpty) {
+        return message.text.trim();
+      }
+    }
+    return fallback;
+  }
+
+  String _buildPreview(String text) {
+    const int maxLength = 42;
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
+  }
+
   void updateTag({required String oldName, required String newName}) {
     final String normalized = newName.trim();
     if (normalized.isEmpty || oldName == normalized) return;
     if (tags.any((TagItem t) => t.name == normalized)) return;
 
-    for (final KnowledgeFolder folder in knowledgeFolders) {
-      for (final TagItem subdir in folder.subdirectories) {
-        if (subdir.name == oldName) {
-          subdir.name = normalized;
-          subdir.id = normalized;
-        }
+    for (final TagItem tag in tags) {
+      if (tag.name == oldName) {
+        tag.name = normalized;
+        tag.id = normalized;
       }
     }
 
@@ -246,6 +339,9 @@ class AppState extends ChangeNotifier {
           if (m.tags[i] == oldName) {
             m.tags[i] = normalized;
           }
+        }
+        if (m.knowledgeEntry?.tagName == oldName) {
+          m.knowledgeEntry!.tagName = normalized;
         }
       }
     }
@@ -257,10 +353,9 @@ class AppState extends ChangeNotifier {
   void addTag(String name) {
     final String normalized = name.trim();
     if (normalized.isEmpty) return;
-    if (knowledgeFolders.isEmpty) return;
     if (tags.any((TagItem t) => t.name == normalized)) return;
 
-    knowledgeFolders.first.subdirectories.add(
+    tags.add(
       TagItem(id: normalized, name: normalized, color: const Color(0xFFF0F2FF)),
     );
     notifyListeners();
@@ -268,12 +363,13 @@ class AppState extends ChangeNotifier {
   }
 
   void deleteTag(String tagId) {
-    for (final KnowledgeFolder folder in knowledgeFolders) {
-      folder.subdirectories.removeWhere((TagItem t) => t.id == tagId);
-    }
+    tags.removeWhere((TagItem t) => t.id == tagId);
     for (final Conversation c in conversations) {
       for (final ChatMessage m in c.messages) {
         m.tags.removeWhere((String t) => t == tagId);
+        if (m.knowledgeEntry?.tagName == tagId) {
+          m.knowledgeEntry!.tagName = null;
+        }
       }
     }
     notifyListeners();
@@ -304,12 +400,7 @@ class AppState extends ChangeNotifier {
     final Conversation c = getConversationById(conversationId);
     final int msgId = _allocMsgId();
     c.messages.add(
-      ChatMessage(
-        id: msgId,
-        fromUser: false,
-        text: '',
-        time: DateTime.now(),
-      ),
+      ChatMessage(id: msgId, fromUser: false, text: '', time: DateTime.now()),
     );
     c.updatedAt = DateTime.now();
     notifyListeners();
@@ -318,8 +409,9 @@ class AppState extends ChangeNotifier {
 
   void appendToMessage(int conversationId, int messageId, String chunk) {
     final Conversation c = getConversationById(conversationId);
-    final ChatMessage m =
-        c.messages.firstWhere((ChatMessage msg) => msg.id == messageId);
+    final ChatMessage m = c.messages.firstWhere(
+      (ChatMessage msg) => msg.id == messageId,
+    );
     m.text += chunk;
     c.preview = m.text.length > 50 ? '${m.text.substring(0, 50)}...' : m.text;
     notifyListeners();
@@ -327,8 +419,9 @@ class AppState extends ChangeNotifier {
 
   void updateMessageText(int conversationId, int messageId, String text) {
     final Conversation c = getConversationById(conversationId);
-    final ChatMessage m =
-        c.messages.firstWhere((ChatMessage msg) => msg.id == messageId);
+    final ChatMessage m = c.messages.firstWhere(
+      (ChatMessage msg) => msg.id == messageId,
+    );
     m.text = text;
     c.preview = text.length > 50 ? '${text.substring(0, 50)}...' : text;
     notifyListeners();
