@@ -32,9 +32,9 @@ class _MainShellPageState extends State<MainShellPage> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: <Widget>[
-            _buildNavItem(0, '首页', 'assets/main_bottom_home_icon.png'),
-            _buildNavItem(1, '知识库', 'assets/main_bottom_knowledge_icon.png'),
-            _buildNavItem(2, '我的', 'assets/main_bottom_mine_icon.png'),
+            _buildNavItem(0, '首页', 'assets/main_home.png'),
+            _buildNavItem(1, '知识库', 'assets/main_knowledge.png'),
+            _buildNavItem(2, '我的', 'assets/main_mine.png'),
           ],
         ),
       ),
@@ -49,6 +49,8 @@ class _MainShellPageState extends State<MainShellPage> {
     return Expanded(
       child: InkWell(
         onTap: () => setState(() => _index = index),
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
@@ -56,8 +58,7 @@ class _MainShellPageState extends State<MainShellPage> {
               assetPath,
               width: 28,
               height: 28,
-              // Removed color filter to ensure original icon is visible if color filter fails
-              // Or use color only if the icons are monochrome
+              color: color,
             ),
             const SizedBox(height: 4),
             Text(

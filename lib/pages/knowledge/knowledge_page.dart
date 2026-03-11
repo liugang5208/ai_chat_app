@@ -58,8 +58,9 @@ class _KnowledgePageState extends State<KnowledgePage> {
             ),
           ),
           _entryTile(
-            assetPath: 'assets/knowledge_folder_icon.png',
+            assetPath: 'assets/knowledge_folder.png',
             title: '文件夹',
+            bgColor: const Color(0xFFFFF7E8),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const FolderListPage()),
@@ -68,8 +69,9 @@ class _KnowledgePageState extends State<KnowledgePage> {
           ),
           const Divider(height: 1, color: Color(0xFFF5F6F8), indent: 84),
           _entryTile(
-            assetPath: 'assets/knowledge_tag_icon.png',
+            assetPath: 'assets/knowledge_tag.png',
             title: '标签',
+            bgColor: const Color(0xFFE8F1FF),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(builder: (_) => const TagListPage()),
@@ -78,8 +80,9 @@ class _KnowledgePageState extends State<KnowledgePage> {
           ),
           const Divider(height: 1, color: Color(0xFFF5F6F8), indent: 84),
           _entryTile(
-            assetPath: 'assets/knowledge_preview_icon.png',
+            assetPath: 'assets/knowledge_preview.png',
             title: '文件预览',
+            bgColor: const Color(0xFFE8FFFB),
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -96,6 +99,7 @@ class _KnowledgePageState extends State<KnowledgePage> {
   Widget _entryTile({
     required String assetPath,
     required String title,
+    required Color bgColor,
     required VoidCallback onTap,
   }) {
     return InkWell(
@@ -104,7 +108,14 @@ class _KnowledgePageState extends State<KnowledgePage> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         child: Row(
           children: <Widget>[
-            Image.asset(assetPath, width: 50, height: 50),
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
+              child: Center(
+                child: Image.asset(assetPath, width: 28, height: 28),
+              ),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(

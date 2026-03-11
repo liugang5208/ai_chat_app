@@ -106,10 +106,20 @@ class _HomePageState extends State<HomePage> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: <Widget>[
-                        Image.asset(
-                          'assets/main_list_icon_${(index % 7) + 1}.png',
-                          width: 56, // Increased from 48
-                          height: 56, // Increased from 48
+                        Container(
+                          width: 56,
+                          height: 56,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFE8F1FF),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Image.asset(
+                              'assets/chat${index % 4}.png',
+                              width: 32,
+                              height: 32,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(

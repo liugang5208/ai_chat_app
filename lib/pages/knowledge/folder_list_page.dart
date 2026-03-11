@@ -97,10 +97,20 @@ class _FolderListPageState extends State<FolderListPage> {
                     ),
                     child: Row(
                       children: <Widget>[
-                        Image.asset(
-                          'assets/knowledge_folder_icon.png',
+                        Container(
                           width: 50,
                           height: 50,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFFF7E8),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Image.asset(
+                              'assets/knowledge_folder.png',
+                              width: 28,
+                              height: 28,
+                            ),
+                          ),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
