@@ -1,0 +1,74 @@
+[
+  {
+    "name": "豆包",
+    "iconKey": "smart_toy",
+    "iconBgValue": 4280197119,
+    "iconColorValue": 4294967295,
+    "subtitle": "Doubao API",
+    "defaultBaseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+    "defaultModels": ["doubao-seed-1.6", "doubao-pro-32k"]
+  },
+  {
+    "name": "元宝",
+    "iconKey": "token",
+    "iconBgValue": 4279604606,
+    "iconColorValue": 4294967295,
+    "subtitle": "Yuanbao API",
+    "defaultBaseUrl": "https://api.hunyuan.cloud.tencent.com/v1",
+    "defaultModels": ["hunyuan-turbos-latest", "hunyuan-large"]
+  },
+  {
+    "name": "千问",
+    "iconKey": "psychology",
+    "iconBgValue": 4286272244,
+    "iconColorValue": 4294967295,
+    "subtitle": "Qwen API",
+    "defaultBaseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "defaultModels": ["qwen-plus", "qwen-turbo", "qwen-max"]
+  },
+  {
+    "name": "OpenAI",
+    "iconKey": "openai",
+    "iconBgValue": 4279308561,
+    "iconColorValue": 4294967295,
+    "subtitle": "OpenAI API",
+    "defaultBaseUrl": "https://api.openai.com/v1",
+    "defaultModels": ["gpt-5.1", "gpt-5-chat-latest", "gpt-5", "gpt-5-mini", "gpt-4o"]
+  },
+  {
+    "name": "Gemini",
+    "iconKey": "gemini",
+    "iconBgValue": 4281298158,
+    "iconColorValue": 4294967295,
+    "subtitle": "Google Gemini",
+    "defaultBaseUrl": "https://generativelanguage.googleapis.com/v1beta",
+    "defaultModels": ["gemini-2.0-flash", "gemini-1.5-pro"]
+  },
+  {
+    "name": "Claude",
+    "iconKey": "claude",
+    "iconBgValue": 4292967239,
+    "iconColorValue": 4294967295,
+    "subtitle": "Anthropic Claude",
+    "defaultBaseUrl": "https://api.anthropic.com/v1",
+    "defaultModels": ["claude-3-7-sonnet-latest", "claude-3-5-sonnet-latest"]
+  },
+  {
+    "name": "DeepSeek",
+    "iconKey": "deepseek",
+    "iconBgValue": 4283136255,
+    "iconColorValue": 4294967295,
+    "subtitle": "DeepSeek API",
+    "defaultBaseUrl": "https://api.deepseek.com",
+    "defaultModels": ["deepseek-chat", "deepseek-reasoner"]
+  },
+  {
+    "name": "OpenRouter",
+    "iconKey": "openrouter",
+    "iconBgValue": 4279308561,
+    "iconColorValue": 4294967295,
+    "subtitle": "OpenRouter API",
+    "defaultBaseUrl": "https://openrouter.ai/api/v1",
+    "defaultModels": ["openai/gpt-4o-mini", "anthropic/claude-3.5-sonnet"]
+  }
+]

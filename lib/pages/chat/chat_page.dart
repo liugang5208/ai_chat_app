@@ -100,7 +100,7 @@ class _ChatPageState extends State<ChatPage> {
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[
                           Text(
-                            app.activeVendor ?? 'Yuanbao',
+                            app.activeVendor ?? '未选择厂商',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -117,9 +117,11 @@ class _ChatPageState extends State<ChatPage> {
                         children: <Widget>[
                           Text(
                             app.activeVendor != null
-                                ? (app.modelConfigs[app.activeVendor]?.model ??
-                                    'DeepSeek Thinking')
-                                : 'DeepSeek Thinking',
+                                ? (app
+                                          .modelConfigs[app.activeVendor]
+                                          ?.effectiveModel ??
+                                      '未选择模型')
+                                : '未选择模型',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -613,11 +615,14 @@ class _ChatPageState extends State<ChatPage> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: vendors.map((String vendor) {
-                              final bool isSelected = app.activeVendor == vendor;
+                              final bool isSelected =
+                                  app.activeVendor == vendor;
                               final bool isHovered = hoveredVendor == vendor;
                               return InkWell(
                                 onHover: (bool value) {
-                                  if (value) setState(() => hoveredVendor = vendor);
+                                  if (value) {
+                                    setState(() => hoveredVendor = vendor);
+                                  }
                                 },
                                 onTap: () {
                                   setState(() => hoveredVendor = vendor);
@@ -664,7 +669,9 @@ class _ChatPageState extends State<ChatPage> {
                           ),
                         ),
                         if (hoveredVendor != null &&
-                            app.modelConfigs.containsKey(hoveredVendor!)) ...<Widget>[
+                            app.modelConfigs.containsKey(
+                              hoveredVendor!,
+                            )) ...<Widget>[
                           const SizedBox(width: 8),
                           // Second level: Models for the selected vendor
                           Container(
@@ -683,55 +690,64 @@ class _ChatPageState extends State<ChatPage> {
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
-                              children: <Widget>[
-                                InkWell(
-                                  onTap: () {
-                                    app.setActiveVendor(hoveredVendor!);
-                                    Navigator.of(dialogContext).pop();
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    child: Row(
-                                      children: <Widget>[
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: <Widget>[
-                                              Text(
-                                                app.modelConfigs[hoveredVendor!]!
-                                                    .model,
-                                                style: const TextStyle(
-                                                  fontSize: 15,
-                                                  fontWeight: FontWeight.w500,
-                                                  color: Color(0xFF1D1F24),
-                                                ),
+                              children: (() {
+                                final String hv = hoveredVendor!;
+                                final ChatConfig config = app.modelConfigs[hv]!;
+                                final List<String> models =
+                                    config.models
+                                        .where(
+                                          (String m) => m.trim().isNotEmpty,
+                                        )
+                                        .toList()
+                                        .isNotEmpty
+                                    ? config.models
+                                          .where(
+                                            (String m) => m.trim().isNotEmpty,
+                                          )
+                                          .toList()
+                                    : <String>[config.effectiveModel];
+
+                                return models.map((String modelName) {
+                                  final bool isActive =
+                                      app.activeVendor == hv &&
+                                      config.effectiveModel == modelName;
+                                  return InkWell(
+                                    onTap: () {
+                                      app.setActiveModelForVendor(
+                                        vendor: hv,
+                                        modelName: modelName,
+                                      );
+                                      Navigator.of(dialogContext).pop();
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: Text(
+                                              modelName,
+                                              style: const TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w500,
+                                                color: Color(0xFF1D1F24),
                                               ),
-                                              const SizedBox(height: 2),
-                                              const Text(
-                                                'Default Model',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: Color(0xFF9197A5),
-                                                ),
-                                              ),
-                                            ],
+                                            ),
                                           ),
-                                        ),
-                                        if (app.activeVendor == hoveredVendor)
-                                          const Icon(
-                                            Icons.check,
-                                            size: 16,
-                                            color: Color(0xFF1D1F24),
-                                          ),
-                                      ],
+                                          if (isActive)
+                                            const Icon(
+                                              Icons.check,
+                                              size: 16,
+                                              color: Color(0xFF1D1F24),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              ],
+                                  );
+                                }).toList();
+                              })(),
                             ),
                           ),
                         ],
@@ -745,10 +761,6 @@ class _ChatPageState extends State<ChatPage> {
         );
       },
     );
-  }
-
-  void _showVendorList(BuildContext context, AppState app) {
-    // This method is no longer needed as its functionality is merged into _showModelSelector
   }
 
   Future<void> _onLongPressAssistantMessage(

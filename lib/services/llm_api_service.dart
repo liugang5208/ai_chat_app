@@ -21,7 +21,7 @@ class LlmApiService {
       request.headers['Authorization'] = 'Bearer ${config.apiKey}';
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(<String, dynamic>{
-        'model': config.model,
+        'model': config.effectiveModel,
         'messages': history
             .map(
               (ChatMessage m) => <String, String>{
@@ -68,5 +68,4 @@ class LlmApiService {
       client.close();
     }
   }
-
 }

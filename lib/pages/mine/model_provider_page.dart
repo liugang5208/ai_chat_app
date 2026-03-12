@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../app_state.dart';
 import '../../models/chat_config.dart';
+import '../../models/vendor_profile.dart';
+import 'model_provider_config_page.dart';
+import 'model_provider_data.dart';
 
 class ModelProviderPage extends StatefulWidget {
   const ModelProviderPage({super.key});
@@ -10,184 +13,198 @@ class ModelProviderPage extends StatefulWidget {
 }
 
 class _ModelProviderPageState extends State<ModelProviderPage> {
-  static const List<String> _vendors = <String>['OpenAI', 'DeepSeek', 'Custom'];
-
-  static const Map<String, String> _defaultBaseUrl = <String, String>{
-    'OpenAI': 'https://api.openai.com/v1',
-    'DeepSeek': 'https://api.deepseek.com',
-  };
-
-  static const Map<String, String> _defaultModel = <String, String>{
-    'OpenAI': 'gpt-3.5-turbo',
-    'DeepSeek': 'deepseek-chat',
-  };
-
-  String _selectedVendor = 'OpenAI';
-  final TextEditingController _apiKeyCtrl = TextEditingController();
-  final TextEditingController _baseUrlCtrl = TextEditingController();
-  final TextEditingController _modelCtrl = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadVendor(_selectedVendor));
+  Future<void> _openConfig(String vendorName) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ModelProviderConfigPage(vendorName: vendorName),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
-  @override
-  void dispose() {
-    _apiKeyCtrl.dispose();
-    _baseUrlCtrl.dispose();
-    _modelCtrl.dispose();
-    super.dispose();
-  }
-
-  void _loadVendor(String vendor) {
-    final AppState app = AppStateScope.of(context);
-    final ChatConfig? config = app.modelConfigs[vendor];
-    if (config != null) {
-      _apiKeyCtrl.text = config.apiKey;
-      _baseUrlCtrl.text = config.baseUrl;
-      _modelCtrl.text = config.model;
-    } else {
-      _apiKeyCtrl.clear();
-      _baseUrlCtrl.text = _defaultBaseUrl[vendor] ?? '';
-      _modelCtrl.text = _defaultModel[vendor] ?? '';
+  Future<void> _showAddVendorDialog() async {
+    final TextEditingController ctrl = TextEditingController();
+    final String? newVendorName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('添加厂商'),
+          content: TextField(
+            controller: ctrl,
+            decoration: const InputDecoration(
+              hintText: '输入厂商名称',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () {
+                final String name = ctrl.text.trim();
+                if (name.isEmpty) return;
+                Navigator.of(context).pop(name);
+              },
+              child: const Text('添加'),
+            ),
+          ],
+        );
+      },
+    );
+    ctrl.dispose();
+    if (!mounted || newVendorName == null || newVendorName.trim().isEmpty) {
+      return;
     }
+    final AppState app = AppStateScope.of(context);
+    final String vendorName = newVendorName.trim();
+    if (!app.vendorProfiles.any((VendorProfile v) => v.name == vendorName)) {
+      app.addVendorProfile(
+        VendorProfile(
+          name: vendorName,
+          iconKey: 'extension',
+          iconBgValue: 0xFF767B87,
+          iconColorValue: 0xFFFFFFFF,
+          subtitle: 'Custom Provider',
+          defaultBaseUrl: '',
+          defaultModels: <String>[],
+        ),
+      );
+    }
+    await _openConfig(vendorName);
+  }
+
+  List<String> _buildVendorOrder(
+    AppState app,
+    Map<String, ChatConfig> configs,
+  ) {
+    final List<String> names = app.vendorProfiles
+        .map((VendorProfile e) => e.name)
+        .toList();
+    for (final String key in configs.keys) {
+      if (!names.contains(key)) names.add(key);
+    }
+    return names;
+  }
+
+  VendorProfile _vendorByName(AppState app, String name) {
+    return app.vendorByName(name) ??
+        const VendorProfile(
+          name: 'Custom',
+          iconKey: 'extension',
+          iconBgValue: 0xFF767B87,
+          iconColorValue: 0xFFFFFFFF,
+          subtitle: 'Custom Provider',
+          defaultBaseUrl: '',
+          defaultModels: <String>[],
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final AppState app = AppStateScope.of(context);
+    final List<String> names = _buildVendorOrder(app, app.modelConfigs);
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
-        title: const Text('模型提供方', style: TextStyle(fontWeight: FontWeight.w700)),
+        backgroundColor: const Color(0xFFF6F7F9),
+        surfaceTintColor: Colors.transparent,
+        centerTitle: true,
+        title: const Text('设置'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      body: Column(
         children: <Widget>[
-          const Text(
-            '模型提供商',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1D2330)),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: _selectedVendor,
-            decoration: InputDecoration(
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            ),
-            items: _vendors
-                .map((String v) => DropdownMenuItem<String>(value: v, child: Text(v)))
-                .toList(),
-            onChanged: (String? val) {
-              if (val == null) return;
-              setState(() {
-                _selectedVendor = val;
-                _loadVendor(val);
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _apiKeyCtrl,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: 'API Key',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _baseUrlCtrl,
-            decoration: InputDecoration(
-              labelText: 'Base URL',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _modelCtrl,
-            decoration: InputDecoration(
-              labelText: 'Model Name',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton(
-            onPressed: () {
-              final ChatConfig config = ChatConfig(
-                vendor: _selectedVendor,
-                apiKey: _apiKeyCtrl.text.trim(),
-                baseUrl: _baseUrlCtrl.text.trim(),
-                model: _modelCtrl.text.trim(),
-              );
-              app.saveModelConfig(config);
-              app.setActiveVendor(_selectedVendor);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('配置已保存')),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4C84FF),
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-            ),
-            child: const Text('保存并设置为当前使用', style: TextStyle(fontSize: 16)),
-          ),
-          if (app.modelConfigs.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 32),
-            const Text(
-              '已配置的提供方',
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1D2330)),
-            ),
-            const SizedBox(height: 8),
-            ...app.modelConfigs.entries.map((MapEntry<String, ChatConfig> entry) {
-              final bool isActive = app.activeVendor == entry.key;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: isActive ? const Color(0xFFEEF3FF) : const Color(0xFFF5F7FC),
-                  borderRadius: BorderRadius.circular(12),
-                  border: isActive
-                      ? Border.all(color: const Color(0xFF4C84FF), width: 1.5)
-                      : null,
-                ),
-                child: ListTile(
-                  title: Text(
-                    entry.key,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    entry.value.model,
-                    style: const TextStyle(color: Color(0xFF8A93A6)),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      if (isActive)
-                        const Chip(
-                          label: Text('使用中', style: TextStyle(fontSize: 12, color: Color(0xFF4C84FF))),
-                          backgroundColor: Color(0xFFDDE8FF),
-                          padding: EdgeInsets.zero,
-                        ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Color(0xFFBFC4D0)),
-                        onPressed: () => app.removeModelConfig(entry.key),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.only(top: 6),
+              itemCount: names.length,
+              separatorBuilder: (BuildContext context, int index) =>
+                  const Divider(height: 1, color: Color(0xFFE8E9ED)),
+              itemBuilder: (BuildContext context, int index) {
+                final String name = names[index];
+                final VendorProfile vendor = _vendorByName(app, name);
+                final bool active = app.activeVendor == name;
+                return InkWell(
+                  onTap: () => _openConfig(name),
+                  child: SizedBox(
+                    height: 64,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Row(
+                        children: <Widget>[
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              color: vendor.iconBg,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              ModelProviderData.iconForKey(vendor.iconKey),
+                              color: vendor.iconColor,
+                              size: 19,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              name,
+                              style: const TextStyle(
+                                fontSize: 24 / 1.5,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF2E3440),
+                              ),
+                            ),
+                          ),
+                          if (active)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              margin: const EdgeInsets.only(right: 14),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFF22C58B),
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: Color(0xFFA1A7B3),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  onTap: () {
-                    setState(() {
-                      _selectedVendor = _vendors.contains(entry.key) ? entry.key : 'Custom';
-                      _loadVendor(entry.key);
-                    });
-                  },
+                );
+              },
+            ),
+          ),
+          SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+              child: SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: _showAddVendorDialog,
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF4EA1E8), width: 1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    foregroundColor: const Color(0xFF2A8EDB),
+                    textStyle: const TextStyle(
+                      fontSize: 21 / 1.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  child: const Text('+  添加'),
                 ),
-              );
-            }),
-          ],
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -3,6 +3,7 @@ import 'models/conversation.dart';
 import 'models/chat_config.dart';
 import 'models/knowledge.dart';
 import 'models/tag_item.dart';
+import 'models/vendor_profile.dart';
 import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
 import 'storage/model_config_storage.dart';
@@ -44,6 +45,7 @@ class AppState extends ChangeNotifier {
     required this.conversations,
     required this.knowledgeFolders,
     required this.tags,
+    required this.vendorProfiles,
     Map<String, ChatConfig>? modelConfigs,
     this.activeVendor,
     int nextConvId = 1,
@@ -55,6 +57,7 @@ class AppState extends ChangeNotifier {
   int _nextConvId;
   int _nextMsgId;
   Map<String, ChatConfig> modelConfigs;
+  final List<VendorProfile> vendorProfiles;
   String? activeVendor;
 
   int _allocConvId() => _nextConvId++;
@@ -74,6 +77,7 @@ class AppState extends ChangeNotifier {
 
   factory AppState.initial({
     required List<TagItem> tags,
+    required List<VendorProfile> vendorProfiles,
     required Map<String, ChatConfig> modelConfigs,
     required String? activeVendor,
     required List<Conversation> conversations,
@@ -90,6 +94,7 @@ class AppState extends ChangeNotifier {
         ),
       ],
       tags: tags,
+      vendorProfiles: vendorProfiles,
       modelConfigs: modelConfigs,
       activeVendor: activeVendor,
       nextConvId: nextConvId,
@@ -379,21 +384,70 @@ class AppState extends ChangeNotifier {
 
   void saveModelConfig(ChatConfig config) {
     modelConfigs[config.vendor] = config;
+    if (!vendorProfiles.any((VendorProfile v) => v.name == config.vendor)) {
+      vendorProfiles.insert(
+        0,
+        VendorProfile(
+          name: config.vendor,
+          iconKey: 'extension',
+          iconBgValue: 0xFF767B87,
+          iconColorValue: 0xFFFFFFFF,
+          subtitle: 'Custom Provider',
+          defaultBaseUrl: config.baseUrl,
+          defaultModels: config.models,
+        ),
+      );
+    }
     notifyListeners();
-    ModelConfigStorage.save(modelConfigs, activeVendor);
+    ModelConfigStorage.save(modelConfigs, activeVendor, vendorProfiles);
   }
 
   void setActiveVendor(String vendor) {
     activeVendor = vendor;
     notifyListeners();
-    ModelConfigStorage.save(modelConfigs, activeVendor);
+    ModelConfigStorage.save(modelConfigs, activeVendor, vendorProfiles);
+  }
+
+  void setActiveModelForVendor({
+    required String vendor,
+    required String modelName,
+  }) {
+    final ChatConfig? cfg = modelConfigs[vendor];
+    if (cfg == null) return;
+    final List<String> newModels = List<String>.from(cfg.models);
+    if (!newModels.contains(modelName)) {
+      newModels.insert(0, modelName);
+    }
+    modelConfigs[vendor] = cfg.copyWith(
+      model: modelName,
+      selectedModel: modelName,
+      models: newModels,
+    );
+    activeVendor = vendor;
+    notifyListeners();
+    ModelConfigStorage.save(modelConfigs, activeVendor, vendorProfiles);
   }
 
   void removeModelConfig(String vendor) {
     modelConfigs.remove(vendor);
     if (activeVendor == vendor) activeVendor = null;
     notifyListeners();
-    ModelConfigStorage.save(modelConfigs, activeVendor);
+    ModelConfigStorage.save(modelConfigs, activeVendor, vendorProfiles);
+  }
+
+  VendorProfile? vendorByName(String name) {
+    for (final VendorProfile v in vendorProfiles) {
+      if (v.name == name) return v;
+    }
+    return null;
+  }
+
+  void addVendorProfile(VendorProfile profile) {
+    if (profile.name.trim().isEmpty) return;
+    if (vendorProfiles.any((VendorProfile v) => v.name == profile.name)) return;
+    vendorProfiles.insert(0, profile);
+    notifyListeners();
+    ModelConfigStorage.save(modelConfigs, activeVendor, vendorProfiles);
   }
 
   int addStreamingMessage(int conversationId) {

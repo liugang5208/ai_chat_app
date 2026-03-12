@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'models/conversation.dart';
 import 'models/chat_config.dart';
 import 'models/tag_item.dart';
+import 'models/vendor_profile.dart';
 import 'app_state.dart';
 import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
@@ -11,21 +12,24 @@ import 'pages/login_page.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final List<TagItem> tags = await TagStorage.load();
-  final (:Map<String, ChatConfig> configs, :String? activeVendor) =
-      await ModelConfigStorage.load();
   final (
-    :List<Conversation> conversations,
-    :int nextConvId,
-    :int nextMsgId,
-  ) = await ConversationStorage.load();
-  runApp(MyApp(
-    initialTags: tags,
-    initialConfigs: configs,
-    initialActiveVendor: activeVendor,
-    initialConversations: conversations,
-    initialNextConvId: nextConvId,
-    initialNextMsgId: nextMsgId,
-  ));
+    :Map<String, ChatConfig> configs,
+    :String? activeVendor,
+    :List<VendorProfile> vendors,
+  ) = await ModelConfigStorage.load();
+  final (:List<Conversation> conversations, :int nextConvId, :int nextMsgId) =
+      await ConversationStorage.load();
+  runApp(
+    MyApp(
+      initialTags: tags,
+      initialConfigs: configs,
+      initialActiveVendor: activeVendor,
+      initialVendors: vendors,
+      initialConversations: conversations,
+      initialNextConvId: nextConvId,
+      initialNextMsgId: nextMsgId,
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -34,6 +38,7 @@ class MyApp extends StatelessWidget {
     required this.initialTags,
     required this.initialConfigs,
     required this.initialActiveVendor,
+    required this.initialVendors,
     required this.initialConversations,
     required this.initialNextConvId,
     required this.initialNextMsgId,
@@ -42,6 +47,7 @@ class MyApp extends StatelessWidget {
   final List<TagItem> initialTags;
   final Map<String, ChatConfig> initialConfigs;
   final String? initialActiveVendor;
+  final List<VendorProfile> initialVendors;
   final List<Conversation> initialConversations;
   final int initialNextConvId;
   final int initialNextMsgId;
@@ -51,6 +57,7 @@ class MyApp extends StatelessWidget {
     return AppStateScope(
       notifier: AppState.initial(
         tags: initialTags,
+        vendorProfiles: initialVendors,
         modelConfigs: initialConfigs,
         activeVendor: initialActiveVendor,
         conversations: initialConversations,
