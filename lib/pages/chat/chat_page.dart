@@ -1,5 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../app_state.dart';
 import '../../models/conversation.dart';
 import '../../models/chat_config.dart';
@@ -20,17 +26,195 @@ class _ChatPageState extends State<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _showInputPanel = false;
   bool _isStreaming = false;
   int? _streamingMsgId;
   bool _isEditingTitle = false;
+  bool _isVoicePressing = false;
+  DateTime? _voiceStartAt;
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _speechReady = false;
+  String _speechText = '';
+  final List<ChatAttachment> _pendingAttachments = <ChatAttachment>[];
+
+  static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_initSpeech());
+  }
 
   @override
   void dispose() {
+    _speech.cancel();
     _controller.dispose();
     _titleController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _initSpeech() async {
+    final bool ready = await _speech.initialize();
+    if (!mounted) return;
+    setState(() {
+      _speechReady = ready;
+    });
+  }
+
+  Future<void> _startVoiceInput() async {
+    if (!_speechReady) {
+      await _initSpeech();
+    }
+    if (!_speechReady || !_speech.isAvailable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('语音识别不可用，请检查麦克风权限')));
+      return;
+    }
+
+    await _speech.stop();
+    setState(() {
+      _isVoicePressing = true;
+      _voiceStartAt = DateTime.now();
+      _speechText = '';
+    });
+
+    await _speech.listen(
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.dictation,
+        partialResults: true,
+      ),
+      onResult: (SpeechRecognitionResult result) {
+        if (!mounted) return;
+        setState(() {
+          _speechText = result.recognizedWords.trim();
+        });
+      },
+    );
+  }
+
+  Future<void> _finishVoiceInput(AppState app, int conversationId) async {
+    if (!_isVoicePressing) return;
+    await _speech.stop();
+    final DateTime startedAt = _voiceStartAt ?? DateTime.now();
+    final int seconds = DateTime.now()
+        .difference(startedAt)
+        .inSeconds
+        .clamp(1, 60);
+    final String recognized = _speechText.trim();
+
+    if (mounted) {
+      setState(() {
+        _isVoicePressing = false;
+        _voiceStartAt = null;
+      });
+    }
+
+    if (recognized.isEmpty) {
+      app.addAssistantMessage(
+        conversationId,
+        '未识别到语音内容，请重试（录音时长 ${seconds}s）。',
+      );
+      _scrollToBottom();
+      return;
+    }
+
+    _controller.text = recognized;
+    await _sendMessage(app, conversationId);
+  }
+
+  String _guessMimeType(String fileName, {bool image = false}) {
+    final String lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.pdf')) return 'application/pdf';
+    if (lower.endsWith('.txt')) return 'text/plain';
+    if (lower.endsWith('.json')) return 'application/json';
+    if (lower.endsWith('.md')) return 'text/markdown';
+    if (lower.endsWith('.doc')) return 'application/msword';
+    if (lower.endsWith('.docx')) {
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+    if (lower.endsWith('.xls')) return 'application/vnd.ms-excel';
+    if (lower.endsWith('.xlsx')) {
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+    if (image) return 'image/jpeg';
+    return 'application/octet-stream';
+  }
+
+  Future<void> _addAttachmentFromXFile(
+    XFile file, {
+    required String type,
+  }) async {
+    final Uint8List bytes = await file.readAsBytes();
+    if (bytes.length > _maxAttachmentBytes) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('附件过大，单个文件请控制在 5MB 以内')));
+      return;
+    }
+    final ChatAttachment attachment = ChatAttachment(
+      type: type,
+      mimeType: _guessMimeType(file.name, image: type == 'image'),
+      fileName: file.name,
+      base64Data: base64Encode(bytes),
+    );
+    if (!mounted) return;
+    setState(() => _pendingAttachments.add(attachment));
+  }
+
+  Future<void> _pickFromCamera() async {
+    final XFile? file = await _imagePicker.pickImage(
+      source: ImageSource.camera,
+    );
+    if (file == null) return;
+    await _addAttachmentFromXFile(file, type: 'image');
+  }
+
+  Future<void> _pickFromGallery() async {
+    final XFile? file = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+    );
+    if (file == null) return;
+    await _addAttachmentFromXFile(file, type: 'image');
+  }
+
+  Future<void> _pickFromFile() async {
+    final FilePickerResult? result = await FilePicker.platform.pickFiles(
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return;
+    final PlatformFile file = result.files.single;
+    final Uint8List? bytes = file.bytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('读取文件失败，请重试')));
+      return;
+    }
+    if (bytes.length > _maxAttachmentBytes) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('附件过大，单个文件请控制在 5MB 以内')));
+      return;
+    }
+    final String fileName = file.name;
+    final ChatAttachment attachment = ChatAttachment(
+      type: 'file',
+      mimeType: _guessMimeType(fileName),
+      fileName: fileName,
+      base64Data: base64Encode(bytes),
+    );
+    if (!mounted) return;
+    setState(() => _pendingAttachments.add(attachment));
   }
 
   @override
@@ -345,7 +529,6 @@ class _ChatPageState extends State<ChatPage> {
               color: Color(0xFF4C84FF),
               minHeight: 2,
             ),
-          if (_showInputPanel) _buildInputPanel(app, conversation),
         ],
       ),
     );
@@ -373,27 +556,63 @@ class _ChatPageState extends State<ChatPage> {
           Row(
             children: <Widget>[
               IconButton(
-                onPressed: () {
-                  app.addUserMessage(conversation.id, '[图片] 拍照上传');
-                  app.addAssistantMessage(conversation.id, '已收到图片，你希望我做什么处理？');
-                },
+                onPressed: _pickFromCamera,
                 icon: const Icon(
                   Icons.camera_alt_outlined,
                   color: Color(0xFF4A4F5D),
                 ),
               ),
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: const InputDecoration(
-                    hintText: '发消息或者按住说话',
-                    hintStyle: TextStyle(
-                      color: Color(0xFFB0B5C2),
-                      fontSize: 15,
+                child: GestureDetector(
+                  onLongPressStart: (_) {
+                    unawaited(_startVoiceInput());
+                  },
+                  onLongPressEnd: (_) {
+                    unawaited(_finishVoiceInput(app, conversation.id));
+                  },
+                  onLongPressCancel: () {
+                    unawaited(_finishVoiceInput(app, conversation.id));
+                  },
+                  child: Container(
+                    height: 42,
+                    alignment: Alignment.centerLeft,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F8FB),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    border: InputBorder.none,
+                    child: _isVoicePressing
+                        ? Center(
+                            child: Text(
+                              _speechText.isNotEmpty
+                                  ? _speechText
+                                  : '正在识别，松开发送',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Color(0xFF4C84FF),
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )
+                        : TextField(
+                            controller: _controller,
+                            decoration: const InputDecoration(
+                              hintText: '发消息或长按语音输入',
+                              hintStyle: TextStyle(
+                                color: Color(0xFFB0B5C2),
+                                fontSize: 15,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            onSubmitted: (_) =>
+                                _sendMessage(app, conversation.id),
+                          ),
                   ),
-                  onSubmitted: (_) => _sendMessage(app, conversation.id),
                 ),
               ),
               IconButton(
@@ -401,8 +620,7 @@ class _ChatPageState extends State<ChatPage> {
                 icon: const Icon(Icons.send, color: Color(0xFF4C84FF)),
               ),
               IconButton(
-                onPressed: () =>
-                    setState(() => _showInputPanel = !_showInputPanel),
+                onPressed: _showAttachmentSheet,
                 icon: const Icon(
                   Icons.add_circle_outline,
                   color: Color(0xFF4A4F5D),
@@ -410,112 +628,155 @@ class _ChatPageState extends State<ChatPage> {
               ),
             ],
           ),
+          if (_pendingAttachments.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: _pendingAttachments.asMap().entries.map((
+                  MapEntry<int, ChatAttachment> entry,
+                ) {
+                  return Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2F5FB),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          entry.value.fileName,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF4A4F5D),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _pendingAttachments.removeAt(entry.key);
+                            });
+                          },
+                          child: const Icon(
+                            Icons.close,
+                            size: 14,
+                            color: Color(0xFF8A90A0),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildInputPanel(AppState app, Conversation conversation) {
+  Future<void> _showAttachmentSheet() async {
     final List<Map<String, dynamic>> actions = <Map<String, dynamic>>[
       <String, dynamic>{
-        'icon': Icons.camera_alt,
+        'asset': 'assets/input_camera.png',
         'label': '相机',
-        'msg': '[图片] 相机拍摄',
+        'action': _pickFromCamera,
       },
-      <String, dynamic>{'icon': Icons.image, 'label': '相册', 'msg': '[图片] 相册选择'},
       <String, dynamic>{
-        'icon': Icons.attach_file,
+        'asset': 'assets/input_photos.png',
+        'label': '相册',
+        'action': _pickFromGallery,
+      },
+      <String, dynamic>{
+        'asset': 'assets/input_file.png',
         'label': '文件',
-        'msg': '[文件] 文档上传',
-      },
-      <String, dynamic>{
-        'icon': Icons.phone,
-        'label': '打电话',
-        'msg': '[系统] 发起电话',
+        'action': _pickFromFile,
       },
     ];
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Color(0xFFEFF2F7))),
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      child: Column(
-        children: <Widget>[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: actions.map((Map<String, dynamic> action) {
-              return GestureDetector(
-                onTap: () {
-                  app.addUserMessage(conversation.id, action['msg'] as String);
-                  app.addAssistantMessage(
-                    conversation.id,
-                    '已接收${action['label']}内容。',
-                  );
-                },
-                child: SizedBox(
-                  width: 70,
-                  child: Column(
-                    children: <Widget>[
-                      Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF5F7FC),
-                          borderRadius: BorderRadius.circular(10),
+      builder: (BuildContext context) {
+        return SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: actions.map((Map<String, dynamic> action) {
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    final Future<void> Function() fn =
+                        action['action'] as Future<void> Function();
+                    unawaited(fn());
+                  },
+                  child: SizedBox(
+                    width: 86,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Container(
+                          width: 58,
+                          height: 58,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F7FC),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            action['asset'] as String,
+                            width: 28,
+                            height: 28,
+                          ),
                         ),
-                        child: Icon(
-                          action['icon'] as IconData,
-                          color: const Color(0xFF4A4F5D),
+                        const SizedBox(height: 8),
+                        Text(
+                          action['label'] as String,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF4A4F5D),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(action['label'] as String),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 120,
-            child: GridView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: 8,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-              ),
-              itemBuilder: (_, int index) {
-                return Container(
-                  width: 82,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    gradient: LinearGradient(
-                      colors: <Color>[
-                        Colors.lightBlue.shade100,
-                        Colors.green.shade100,
                       ],
                     ),
                   ),
                 );
-              },
+              }).toList(),
             ),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
   Future<void> _sendMessage(AppState app, int conversationId) async {
     final String value = _controller.text.trim();
-    if (value.isEmpty || _isStreaming) return;
+    final List<ChatAttachment> attachments = List<ChatAttachment>.from(
+      _pendingAttachments,
+    );
+    if ((value.isEmpty && attachments.isEmpty) || _isStreaming) return;
     _controller.clear();
+    if (mounted && attachments.isNotEmpty) {
+      setState(() {
+        _pendingAttachments.clear();
+      });
+    }
 
-    app.addUserMessage(conversationId, value);
+    final String displayText = value.isNotEmpty
+        ? value
+        : '[附件] ${attachments.map((ChatAttachment a) => a.fileName).join(', ')}';
+    app.addUserMessage(conversationId, displayText, attachments: attachments);
     _scrollToBottom();
 
     final ChatConfig? config = app.activeVendor != null

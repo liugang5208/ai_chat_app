@@ -188,11 +188,21 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  int addUserMessage(int conversationId, String text) {
+  int addUserMessage(
+    int conversationId,
+    String text, {
+    List<ChatAttachment>? attachments,
+  }) {
     final Conversation c = getConversationById(conversationId);
     final int msgId = _allocMsgId();
     c.messages.add(
-      ChatMessage(id: msgId, fromUser: true, text: text, time: DateTime.now()),
+      ChatMessage(
+        id: msgId,
+        fromUser: true,
+        text: text,
+        time: DateTime.now(),
+        attachments: attachments,
+      ),
     );
     c.preview = text;
     c.updatedAt = DateTime.now();

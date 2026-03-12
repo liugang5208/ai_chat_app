@@ -22,14 +22,7 @@ class LlmApiService {
       request.headers['Content-Type'] = 'application/json';
       request.body = jsonEncode(<String, dynamic>{
         'model': config.effectiveModel,
-        'messages': history
-            .map(
-              (ChatMessage m) => <String, String>{
-                'role': m.fromUser ? 'user' : 'assistant',
-                'content': m.text,
-              },
-            )
-            .toList(),
+        'messages': history.map(_mapMessage).toList(),
         'temperature': _temperature,
         'max_tokens': _maxCompletionTokens,
         'stream': true,
@@ -67,5 +60,39 @@ class LlmApiService {
     } finally {
       client.close();
     }
+  }
+
+  static Map<String, dynamic> _mapMessage(ChatMessage m) {
+    if (!m.fromUser || m.attachments.isEmpty) {
+      return <String, dynamic>{
+        'role': m.fromUser ? 'user' : 'assistant',
+        'content': m.text,
+      };
+    }
+
+    final List<Map<String, dynamic>> content = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'type': 'text',
+        'text': m.text.isEmpty ? '请分析附件内容。' : m.text,
+      },
+    ];
+
+    for (final ChatAttachment a in m.attachments) {
+      if (a.mimeType.startsWith('image/')) {
+        content.add(<String, dynamic>{
+          'type': 'image_url',
+          'image_url': <String, dynamic>{
+            'url': 'data:${a.mimeType};base64,${a.base64Data}',
+          },
+        });
+      } else {
+        content.add(<String, dynamic>{
+          'type': 'text',
+          'text': '文件(${a.fileName}, ${a.mimeType}) base64:\n${a.base64Data}',
+        });
+      }
+    }
+
+    return <String, dynamic>{'role': 'user', 'content': content};
   }
 }

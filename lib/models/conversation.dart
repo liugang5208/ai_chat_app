@@ -43,8 +43,10 @@ class ChatMessage {
     required this.text,
     required this.time,
     List<String>? tags,
+    List<ChatAttachment>? attachments,
     this.knowledgeEntry,
-  }) : tags = tags ?? <String>[];
+  }) : tags = tags ?? <String>[],
+       attachments = attachments ?? <ChatAttachment>[];
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
     id: json['id'] as int,
@@ -52,6 +54,13 @@ class ChatMessage {
     text: json['text'] as String,
     time: DateTime.parse(json['time'] as String),
     tags: (json['tags'] as List<dynamic>?)?.cast<String>() ?? <String>[],
+    attachments:
+        (json['attachments'] as List<dynamic>?)
+            ?.map(
+              (dynamic e) => ChatAttachment.fromJson(e as Map<String, dynamic>),
+            )
+            .toList() ??
+        <ChatAttachment>[],
     knowledgeEntry: json['knowledgeEntry'] == null
         ? null
         : MessageKnowledgeEntry.fromJson(
@@ -64,6 +73,7 @@ class ChatMessage {
   String text;
   final DateTime time;
   final List<String> tags;
+  final List<ChatAttachment> attachments;
   MessageKnowledgeEntry? knowledgeEntry;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -72,7 +82,36 @@ class ChatMessage {
     'text': text,
     'time': time.toIso8601String(),
     'tags': tags,
+    'attachments': attachments.map((ChatAttachment a) => a.toJson()).toList(),
     'knowledgeEntry': knowledgeEntry?.toJson(),
+  };
+}
+
+class ChatAttachment {
+  ChatAttachment({
+    required this.type,
+    required this.mimeType,
+    required this.fileName,
+    required this.base64Data,
+  });
+
+  factory ChatAttachment.fromJson(Map<String, dynamic> json) => ChatAttachment(
+    type: json['type'] as String,
+    mimeType: json['mimeType'] as String,
+    fileName: json['fileName'] as String,
+    base64Data: json['base64Data'] as String,
+  );
+
+  final String type; // image|file
+  final String mimeType;
+  final String fileName;
+  final String base64Data;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'type': type,
+    'mimeType': mimeType,
+    'fileName': fileName,
+    'base64Data': base64Data,
   };
 }
 

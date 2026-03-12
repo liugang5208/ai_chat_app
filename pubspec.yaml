@@ -34,6 +34,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   path_provider: ^2.1.5
   http: ^1.2.2
+  speech_to_text: ^7.3.0
+  image_picker: ^1.1.2
+  file_picker: ^10.1.9
 
 dev_dependencies:
   flutter_test:
