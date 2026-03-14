@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'my_favorites_page.dart';
 import 'model_provider_page.dart';
+import '../login_page.dart';
 
 class MinePage extends StatelessWidget {
   const MinePage({super.key});
@@ -109,6 +110,51 @@ class MinePage extends StatelessWidget {
                   const Expanded(
                     child: Text(
                       '模型提供方',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1D2330),
+                      ),
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Color(0xFFBFC4D0),
+                    size: 24,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1, color: Color(0xFFF5F6F8), indent: 84),
+          InkWell(
+            onTap: () {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute<void>(builder: (_) => const LoginPage()),
+                (Route<dynamic> route) => false,
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF2F0),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      color: Color(0xFFE0574F),
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Text(
+                      '退出登录',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,

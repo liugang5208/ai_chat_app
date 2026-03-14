@@ -1,0 +1,144 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
+import 'package:path_provider/path_provider.dart';
+
+class LocalAuthUser {
+  LocalAuthUser({
+    required this.phone,
+    required this.passwordHash,
+    required this.salt,
+    required this.createdAt,
+  });
+
+  final String phone;
+  final String passwordHash;
+  final String salt;
+  final String createdAt;
+
+  factory LocalAuthUser.fromJson(Map<String, dynamic> json) {
+    return LocalAuthUser(
+      phone: json['phone'] as String? ?? '',
+      passwordHash: json['passwordHash'] as String? ?? '',
+      salt: json['salt'] as String? ?? '',
+      createdAt: json['createdAt'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'phone': phone,
+      'passwordHash': passwordHash,
+      'salt': salt,
+      'createdAt': createdAt,
+    };
+  }
+}
+
+class LocalAuthStorage {
+  static final Random _random = Random.secure();
+
+  static Future<File> _file() async {
+    final Directory dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/auth_users.json');
+  }
+
+  static Future<List<LocalAuthUser>> loadUsers() async {
+    try {
+      final File file = await _file();
+      if (!file.existsSync()) return <LocalAuthUser>[];
+      final Map<String, dynamic> data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final List<dynamic> users = (data['users'] as List<dynamic>?) ?? <dynamic>[];
+      return users
+          .map((dynamic e) => LocalAuthUser.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return <LocalAuthUser>[];
+    }
+  }
+
+  static Future<void> _saveUsers(List<LocalAuthUser> users) async {
+    final File file = await _file();
+    await file.writeAsString(jsonEncode(<String, dynamic>{
+      'users': users.map((LocalAuthUser u) => u.toJson()).toList(),
+    }));
+  }
+
+  static Future<bool> registerUser({
+    required String phone,
+    required String password,
+  }) async {
+    final String normalized = phone.trim();
+    final List<LocalAuthUser> users = await loadUsers();
+    final bool exists = users.any((LocalAuthUser u) => u.phone == normalized);
+    if (exists) return false;
+    final String salt = _randomSalt();
+    final String hash = _hashPassword(password, salt);
+    users.add(
+      LocalAuthUser(
+        phone: normalized,
+        passwordHash: hash,
+        salt: salt,
+        createdAt: DateTime.now().toIso8601String(),
+      ),
+    );
+    await _saveUsers(users);
+    return true;
+  }
+
+  static Future<bool> verifyPassword({
+    required String phone,
+    required String password,
+  }) async {
+    final String normalized = phone.trim();
+    final List<LocalAuthUser> users = await loadUsers();
+    final LocalAuthUser? user = _findByPhone(users, normalized);
+    if (user == null) return false;
+    final String hash = _hashPassword(password, user.salt);
+    return hash == user.passwordHash;
+  }
+
+  static Future<bool> userExists(String phone) async {
+    final String normalized = phone.trim();
+    final List<LocalAuthUser> users = await loadUsers();
+    return _findByPhone(users, normalized) != null;
+  }
+
+  static Future<bool> resetPassword({
+    required String phone,
+    required String newPassword,
+  }) async {
+    final String normalized = phone.trim();
+    final List<LocalAuthUser> users = await loadUsers();
+    final int idx = users.indexWhere((LocalAuthUser u) => u.phone == normalized);
+    if (idx < 0) return false;
+    final String salt = _randomSalt();
+    users[idx] = LocalAuthUser(
+      phone: users[idx].phone,
+      passwordHash: _hashPassword(newPassword, salt),
+      salt: salt,
+      createdAt: users[idx].createdAt,
+    );
+    await _saveUsers(users);
+    return true;
+  }
+
+  static LocalAuthUser? _findByPhone(List<LocalAuthUser> users, String phone) {
+    for (final LocalAuthUser u in users) {
+      if (u.phone == phone) return u;
+    }
+    return null;
+  }
+
+  static String _randomSalt() {
+    final List<int> bytes = List<int>.generate(16, (_) => _random.nextInt(256));
+    return base64UrlEncode(bytes);
+  }
+
+  static String _hashPassword(String password, String salt) {
+    final List<int> bytes = utf8.encode('$salt::$password');
+    return sha256.convert(bytes).toString();
+  }
+}
