@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../app_state.dart';
 import '../../models/conversation.dart';
 import '../../models/chat_config.dart';
@@ -22,7 +23,7 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
-class _ChatPageState extends State<ChatPage> {
+class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
@@ -36,22 +37,42 @@ class _ChatPageState extends State<ChatPage> {
   bool _speechReady = false;
   String _speechText = '';
   final List<ChatAttachment> _pendingAttachments = <ChatAttachment>[];
+  String? _quotedAssistantText;
+  bool _streamInterruptedByLifecycle = false;
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
+  static const int _maxStreamRetries = 2;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(WakelockPlus.enable());
     unawaited(_initSpeech());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(WakelockPlus.disable());
     _speech.cancel();
     _controller.dispose();
     _titleController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_isStreaming &&
+        (state == AppLifecycleState.inactive ||
+            state == AppLifecycleState.paused ||
+            state == AppLifecycleState.hidden)) {
+      _streamInterruptedByLifecycle = true;
+    }
+    if (state == AppLifecycleState.resumed) {
+      unawaited(WakelockPlus.enable());
+    }
   }
 
   Future<void> _initSpeech() async {
@@ -553,6 +574,45 @@ class _ChatPageState extends State<ChatPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if ((_quotedAssistantText?.isNotEmpty ?? false)) ...<Widget>[
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(6, 6, 6, 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF2F5FB),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      _quotedAssistantText!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF4A4F5D),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _quotedAssistantText = null;
+                      });
+                    },
+                    child: const Icon(
+                      Icons.close,
+                      size: 14,
+                      color: Color(0xFF8A90A0),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           Row(
             children: <Widget>[
               IconButton(
@@ -762,19 +822,32 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _sendMessage(AppState app, int conversationId) async {
     final String value = _controller.text.trim();
+    final String? quotedText = _quotedAssistantText?.trim();
     final List<ChatAttachment> attachments = List<ChatAttachment>.from(
       _pendingAttachments,
     );
-    if ((value.isEmpty && attachments.isEmpty) || _isStreaming) return;
+    if (_isStreaming) return;
+    if (value.isEmpty && attachments.isEmpty && (quotedText?.isEmpty ?? true)) {
+      return;
+    }
+    if (value.isEmpty && !(quotedText?.isEmpty ?? true)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入追问问题后再发送')));
+      return;
+    }
+
+    final String finalText = _buildMessageText(value, quotedText);
     _controller.clear();
-    if (mounted && attachments.isNotEmpty) {
+    if (mounted && (attachments.isNotEmpty || !(quotedText?.isEmpty ?? true))) {
       setState(() {
         _pendingAttachments.clear();
+        _quotedAssistantText = null;
       });
     }
 
-    final String displayText = value.isNotEmpty
-        ? value
+    final String displayText = finalText.isNotEmpty
+        ? finalText
         : '[附件] ${attachments.map((ChatAttachment a) => a.fileName).join(', ')}';
     app.addUserMessage(conversationId, displayText, attachments: attachments);
     _scrollToBottom();
@@ -795,6 +868,7 @@ class _ChatPageState extends State<ChatPage> {
       _isStreaming = true;
       _streamingMsgId = streamMsgId;
     });
+    _streamInterruptedByLifecycle = false;
     _scrollToBottom();
 
     try {
@@ -803,13 +877,36 @@ class _ChatPageState extends State<ChatPage> {
           .where((ChatMessage m) => m.id != streamMsgId)
           .toList();
 
-      await for (final String chunk in LlmApiService.streamChat(
-        config: config,
-        history: history,
-      )) {
-        if (!mounted) break;
-        app.appendToMessage(conversationId, streamMsgId, chunk);
-        _scrollToBottom();
+      int attempt = 0;
+      while (true) {
+        try {
+          attempt += 1;
+          if (attempt > 1 && mounted) {
+            app.updateMessageText(conversationId, streamMsgId, '');
+          }
+
+          await for (final String chunk in LlmApiService.streamChat(
+            config: config,
+            history: history,
+          )) {
+            if (!mounted) break;
+            app.appendToMessage(conversationId, streamMsgId, chunk);
+            _scrollToBottom();
+          }
+          break;
+        } catch (e) {
+          final bool shouldRetry = _shouldRetryStreamError(e) &&
+              attempt <= _maxStreamRetries &&
+              mounted;
+          if (!shouldRetry) rethrow;
+
+          app.updateMessageText(
+            conversationId,
+            streamMsgId,
+            '连接中断，正在重连（$attempt/$_maxStreamRetries）...',
+          );
+          await Future<void>.delayed(const Duration(seconds: 1));
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -822,8 +919,27 @@ class _ChatPageState extends State<ChatPage> {
           _streamingMsgId = null;
         });
       }
+      _streamInterruptedByLifecycle = false;
       app.saveConversations();
     }
+  }
+
+  bool _shouldRetryStreamError(Object error) {
+    if (_streamInterruptedByLifecycle) return true;
+    final String msg = error.toString().toLowerCase();
+    return error is TimeoutException ||
+        msg.contains('socket') ||
+        msg.contains('network') ||
+        msg.contains('connection') ||
+        msg.contains('broken pipe') ||
+        msg.contains('unexpectedly');
+  }
+
+  String _buildMessageText(String question, String? quotedText) {
+    final String normalizedQuestion = question.trim();
+    final String normalizedQuote = quotedText?.trim() ?? '';
+    if (normalizedQuote.isEmpty) return normalizedQuestion;
+    return '引用内容：\n$normalizedQuote\n\n追问：\n$normalizedQuestion';
   }
 
   void _scrollToBottom() {
@@ -1034,30 +1150,47 @@ class _ChatPageState extends State<ChatPage> {
       builder: (BuildContext context) {
         return Dialog(
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.outlined_flag),
-                title: const Text('打标签', style: TextStyle(fontSize: 16)),
-                onTap: () => Navigator.of(context).pop('tag'),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.star_border),
-                title: const Text('收藏', style: TextStyle(fontSize: 16)),
-                onTap: () => Navigator.of(context).pop('favorite'),
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.ios_share),
-                title: const Text('导出', style: TextStyle(fontSize: 16)),
-                onTap: () => Navigator.of(context).pop('export'),
-              ),
-            ],
+          insetPadding: const EdgeInsets.symmetric(horizontal: 22),
+          backgroundColor: Colors.transparent,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                _buildActionTile(
+                  icon: Icons.outlined_flag,
+                  title: '打标签',
+                  action: 'tag',
+                ),
+                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                _buildActionTile(
+                  icon: Icons.star_border,
+                  title: '收藏',
+                  action: 'favorite',
+                ),
+                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                _buildActionTile(
+                  icon: Icons.ios_share,
+                  title: '导出',
+                  action: 'export',
+                ),
+                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                _buildActionTile(
+                  icon: Icons.copy_outlined,
+                  title: '复制',
+                  action: 'copy',
+                ),
+                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                _buildActionTile(
+                  icon: Icons.reply_rounded,
+                  title: '追问',
+                  action: 'followup',
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -1065,7 +1198,20 @@ class _ChatPageState extends State<ChatPage> {
 
     if (!mounted || action == null) return;
 
-    if (action == 'tag') {
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: message.text));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+    } else if (action == 'followup') {
+      setState(() {
+        _quotedAssistantText = message.text.trim();
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已添加追问内容，输入问题后发送')));
+    } else if (action == 'tag') {
       await _showTagSheet(context, conversationId, message.id);
     } else if (action == 'favorite') {
       app.saveAssistantMessageToKnowledge(
@@ -1081,6 +1227,27 @@ class _ChatPageState extends State<ChatPage> {
         context,
       ).showSnackBar(const SnackBar(content: Text('已导出内容（示例）')));
     }
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required String action,
+  }) {
+    return ListTile(
+      minTileHeight: 62,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
+      leading: Icon(icon, size: 28, color: const Color(0xFF1D1F24)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF1D1F24),
+        ),
+      ),
+      onTap: () => Navigator.of(context).pop(action),
+    );
   }
 
   Future<void> _showTagSheet(

@@ -35,6 +35,7 @@ class LlmApiService {
       }
 
       String buffer = '';
+      bool streamFinished = false;
       await for (final String chunk in response.stream.transform(
         utf8.decoder,
       )) {
@@ -44,18 +45,29 @@ class LlmApiService {
         for (final String line in lines) {
           if (line.startsWith('data: ')) {
             final String data = line.substring(6).trim();
-            if (data == '[DONE]') return;
+            if (data == '[DONE]') {
+              streamFinished = true;
+              return;
+            }
             try {
               final Map<String, dynamic> json =
                   jsonDecode(data) as Map<String, dynamic>;
-              final String? delta =
+              final Map<String, dynamic>? choice =
                   ((json['choices'] as List<dynamic>?)?.first
-                          as Map<String, dynamic>?)?['delta']?['content']
+                      as Map<String, dynamic>?);
+              final String? delta =
+                  (choice?['delta'] as Map<String, dynamic>?)?['content']
                       as String?;
               if (delta != null && delta.isNotEmpty) yield delta;
+              if (choice?['finish_reason'] != null) {
+                streamFinished = true;
+              }
             } catch (_) {}
           }
         }
+      }
+      if (!streamFinished) {
+        throw Exception('Stream ended unexpectedly');
       }
     } finally {
       client.close();

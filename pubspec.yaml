@@ -37,6 +37,7 @@ dependencies:
   speech_to_text: ^7.3.0
   image_picker: ^1.1.2
   file_picker: ^10.1.9
+  wakelock_plus: ^1.2.8
 
 dev_dependencies:
   flutter_test:
@@ -94,7 +95,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: assets/login_center_icon.png
+  image_path: assets/welcome.jpg
   remove_alpha_ios: true
   min_sdk_android: 21
   web:
@@ -106,7 +107,7 @@ flutter_launcher_icons:
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/login_background_top.png
+  image: assets/welcome.jpg
   android_gravity: fill
   ios_content_mode: scaleAspectFill
   android: true
@@ -114,4 +115,4 @@ flutter_native_splash:
   web: false
   android_12:
     color: "#FFFFFF"
-    image: assets/login_background_top.png
+    image: assets/welcome.jpg
