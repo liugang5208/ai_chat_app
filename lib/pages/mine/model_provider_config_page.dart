@@ -109,40 +109,230 @@ class _ModelProviderConfigPageState extends State<ModelProviderConfigPage> {
     ).showSnackBar(const SnackBar(content: Text('配置已保存并启用')));
   }
 
-  void _onAddModel() {
-    _newModelCtrl.clear();
-    showDialog<void>(
+  Future<void> _showEditModelDialog([String? initialModel]) async {
+    _newModelCtrl.text = initialModel ?? '';
+    final TextEditingController displayNameCtrl = TextEditingController();
+    final TextEditingController contextWindowCtrl = TextEditingController();
+    final TextEditingController maxOutputCtrl = TextEditingController();
+    if (initialModel != null) {
+      contextWindowCtrl.text = '128000';
+      maxOutputCtrl.text = '4096';
+    }
+
+    await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('新建模型'),
-          content: TextField(
-            controller: _newModelCtrl,
-            decoration: const InputDecoration(
-              hintText: '输入模型名称',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () {
-                final String name = _newModelCtrl.text.trim();
-                if (name.isEmpty) return;
-                setState(() {
-                  if (!_models.contains(name)) _models.insert(0, name);
-                  _selectedModel = name;
-                });
-                Navigator.of(context).pop();
-              },
-              child: const Text('确定'),
-            ),
-          ],
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Center(
+                    child: Container(
+                      width: 60,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE5E7EB),
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    initialModel == null ? '新建模型' : '编辑模型',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  _buildRowField(
+                    label: '模型ID',
+                    child: _buildDialogField(
+                      controller: _newModelCtrl,
+                      hintText: '',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildRowField(
+                    label: '显示名称',
+                    child: _buildDialogField(
+                      controller: displayNameCtrl,
+                      hintText: '可选',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    '高级设置',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _buildColumnField(
+                          label: '上下文窗口',
+                          child: _buildDialogField(
+                            controller: contextWindowCtrl,
+                            hintText: '例如 128000',
+                            showArrows: true,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildColumnField(
+                          label: '最大输出Token数',
+                          child: _buildDialogField(
+                            controller: maxOutputCtrl,
+                            hintText: '例如 4096',
+                            showArrows: true,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        final String name = _newModelCtrl.text.trim();
+                        if (name.isEmpty) return;
+                        setState(() {
+                          if (initialModel != null) {
+                            final int index = _models.indexOf(initialModel);
+                            if (index != -1) {
+                              _models[index] = name;
+                            }
+                          } else {
+                            if (!_models.contains(name)) _models.insert(0, name);
+                          }
+                          _selectedModel = name;
+                        });
+                        Navigator.of(context).pop();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: const Color(0xFF2F8DFB),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text('保存', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _buildRowField({required String label, required Widget child}) {
+    return Row(
+      children: <Widget>[
+        SizedBox(
+          width: 76,
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              color: Color(0xFF374151),
+            ),
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Widget _buildColumnField({required String label, required Widget child}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 8),
+        child,
+      ],
+    );
+  }
+
+  InputDecoration _dialogInputDecoration({String? hintText, bool showArrows = false}) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: Color(0xFFD1D5DB), fontSize: 14),
+      isDense: true,
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: Color(0xFF2F8DFB), width: 1),
+      ),
+      suffixIcon: showArrows
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: const <Widget>[
+                Icon(Icons.keyboard_arrow_up, size: 14, color: Color(0xFF9CA3AF)),
+                Icon(Icons.keyboard_arrow_down, size: 14, color: Color(0xFF9CA3AF)),
+              ],
+            )
+          : null,
+    );
+  }
+
+  Widget _buildDialogField({
+    required TextEditingController controller,
+    required String hintText,
+    bool showArrows = false,
+  }) {
+    return SizedBox(
+      height: 44,
+      child: TextField(
+        controller: controller,
+        decoration: _dialogInputDecoration(hintText: hintText, showArrows: showArrows),
+        style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+      ),
     );
   }
 
@@ -162,6 +352,35 @@ class _ModelProviderConfigPageState extends State<ModelProviderConfigPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('示例页面：请按你的 API 实现获取模型列表')));
+  }
+
+  void _persistModelsToConfig() {
+    final AppState app = AppStateScope.of(context);
+    final ChatConfig? existing = app.modelConfigs[widget.vendorName];
+    final List<String> normalizedModels = _models
+        .map((String m) => m.trim())
+        .where((String m) => m.isNotEmpty)
+        .toSet()
+        .toList();
+    final String selected = (_selectedModel ?? '').trim();
+    final String effectiveModel = selected.isNotEmpty
+        ? selected
+        : (normalizedModels.isNotEmpty ? normalizedModels.first : '');
+
+    app.saveModelConfig(
+      ChatConfig(
+        vendor: widget.vendorName,
+        apiKey: _apiKeyCtrl.text.trim().isNotEmpty
+            ? _apiKeyCtrl.text.trim()
+            : (existing?.apiKey ?? ''),
+        baseUrl: _baseUrlCtrl.text.trim().isNotEmpty
+            ? _baseUrlCtrl.text.trim()
+            : (existing?.baseUrl ?? ''),
+        model: effectiveModel,
+        selectedModel: effectiveModel,
+        models: normalizedModels,
+      ),
+    );
   }
 
   String _endpointPreview(String baseUrl) {
@@ -326,7 +545,7 @@ class _ModelProviderConfigPageState extends State<ModelProviderConfigPage> {
           const SizedBox(height: 8),
           Row(
             children: <Widget>[
-              _ActionChip(label: '+  新建', onTap: _onAddModel),
+              _ActionChip(label: '+新建', onTap: () => _showEditModelDialog()),
               const SizedBox(width: 8),
               _ActionChip(label: '重置', onTap: _onReset),
               const SizedBox(width: 8),
@@ -384,8 +603,7 @@ class _ModelProviderConfigPageState extends State<ModelProviderConfigPage> {
                           ),
                         ),
                         IconButton(
-                          onPressed: () =>
-                              setState(() => _selectedModel = model),
+                          onPressed: () => _showEditModelDialog(model),
                           icon: Icon(
                             isSelected
                                 ? Icons.settings
@@ -404,6 +622,7 @@ class _ModelProviderConfigPageState extends State<ModelProviderConfigPage> {
                                     : null;
                               }
                             });
+                            _persistModelsToConfig();
                           },
                           icon: const Icon(
                             Icons.remove_circle_outline,

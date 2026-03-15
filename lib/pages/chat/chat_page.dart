@@ -1222,7 +1222,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已收藏并加入文件夹')));
-    } else {
+    } else if (action == 'export') {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已导出内容（示例）')));
