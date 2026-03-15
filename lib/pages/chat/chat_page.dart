@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -430,9 +431,26 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 final Color bubbleColor = fromUser
                     ? const Color(0xFF4C84FF)
                     : const Color(0xFFF5F6FA);
-                final Color textColor = fromUser
-                    ? Colors.white
-                    : const Color(0xFF1F2633);
+                final TextStyle messageTextStyle = fromUser
+                    ? const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        height: 1.55,
+                        fontWeight: FontWeight.w600,
+                      )
+                    : const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 16,
+                        height: 1.7,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'PingFang SC',
+                        fontFamilyFallback: <String>[
+                          'Hiragino Sans GB',
+                          'Noto Sans CJK SC',
+                          'Microsoft YaHei',
+                          'WenQuanYi Zen Hei',
+                        ],
+                      );
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
@@ -483,13 +501,59 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     message.text.isEmpty)
                                   const ThinkingDots()
                                 else
-                                  Text(
-                                    message.text,
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontSize: 15,
-                                      height: 1.55,
-                                      fontWeight: FontWeight.w600,
+                                  MarkdownBody(
+                                    data: message.text,
+                                    selectable: true,
+                                    shrinkWrap: true,
+                                    styleSheet: MarkdownStyleSheet(
+                                      p: messageTextStyle,
+                                      h1: messageTextStyle.copyWith(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.5,
+                                      ),
+                                      h2: messageTextStyle.copyWith(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.5,
+                                      ),
+                                      h3: messageTextStyle.copyWith(
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.w600,
+                                        height: 1.5,
+                                      ),
+                                      listBullet: messageTextStyle,
+                                      strong: messageTextStyle.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      em: messageTextStyle.copyWith(
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      blockquote: messageTextStyle.copyWith(
+                                        color: const Color(0xFF374151),
+                                      ),
+                                      code: messageTextStyle.copyWith(
+                                        fontFamily: 'Menlo',
+                                        fontFamilyFallback: const <String>[
+                                          'Monaco',
+                                          'Consolas',
+                                        ],
+                                        fontSize: 14,
+                                        height: 1.5,
+                                      ),
+                                      codeblockPadding: const EdgeInsets.all(10),
+                                      codeblockDecoration: BoxDecoration(
+                                        color: const Color(0xFFEFF2F7),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      horizontalRuleDecoration: const BoxDecoration(
+                                        border: Border(
+                                          top: BorderSide(
+                                            width: 1,
+                                            color: Color(0xFFD1D5DB),
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 if (message.tags.isNotEmpty) ...<Widget>[
