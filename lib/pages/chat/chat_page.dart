@@ -428,6 +428,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               itemBuilder: (BuildContext context, int index) {
                 final ChatMessage message = conversation.messages[index];
                 final bool fromUser = message.fromUser;
+                final VoidCallback? onAssistantLongPress = fromUser
+                    ? null
+                    : () => _onLongPressAssistantMessage(
+                          app,
+                          conversation.id,
+                          message,
+                        );
                 final Color bubbleColor = fromUser
                     ? const Color(0xFF4C84FF)
                     : const Color(0xFFF5F6FA);
@@ -454,33 +461,28 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Row(
-                    mainAxisAlignment: fromUser
-                        ? MainAxisAlignment.end
-                        : MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      if (!fromUser) ...<Widget>[
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: const Color(0xFFEEF3FF),
-                          child: const Icon(
-                            Icons.auto_awesome,
-                            size: 16,
-                            color: Color(0xFF4C84FF),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onLongPress: onAssistantLongPress,
+                    child: Row(
+                      mainAxisAlignment: fromUser
+                          ? MainAxisAlignment.end
+                          : MainAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        if (!fromUser) ...<Widget>[
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: const Color(0xFFEEF3FF),
+                            child: const Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: Color(0xFF4C84FF),
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      GestureDetector(
-                        onLongPress: fromUser
-                            ? null
-                            : () => _onLongPressAssistantMessage(
-                                app,
-                                conversation.id,
-                                message,
-                              ),
-                        child: ConstrainedBox(
+                          const SizedBox(width: 8),
+                        ],
+                        ConstrainedBox(
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.68,
                           ),
@@ -503,7 +505,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                 else
                                   MarkdownBody(
                                     data: message.text,
-                                    selectable: true,
+                                    selectable: false,
                                     shrinkWrap: true,
                                     styleSheet: MarkdownStyleSheet(
                                       p: messageTextStyle,
@@ -588,20 +590,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                             ),
                           ),
                         ),
-                      ),
-                      if (fromUser) ...<Widget>[
-                        const SizedBox(width: 8),
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: const Color(0xFF4C84FF),
-                          child: const Icon(
-                            Icons.person,
-                            size: 18,
-                            color: Colors.white,
+                        if (fromUser) ...<Widget>[
+                          const SizedBox(width: 8),
+                          CircleAvatar(
+                            radius: 16,
+                            backgroundColor: const Color(0xFF4C84FF),
+                            child: const Icon(
+                              Icons.person,
+                              size: 18,
+                              color: Colors.white,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 );
               },
