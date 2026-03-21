@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -40,6 +41,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final List<ChatAttachment> _pendingAttachments = <ChatAttachment>[];
   String? _quotedAssistantText;
   bool _streamInterruptedByLifecycle = false;
+  SelectedContent? _selectedContent;
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
   static const int _maxStreamRetries = 2;
@@ -486,110 +488,163 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.68,
                           ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 9,
-                            ),
-                            decoration: BoxDecoration(
-                              color: bubbleColor,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                if (!fromUser &&
-                                    message.id == _streamingMsgId &&
-                                    message.text.isEmpty)
-                                  const ThinkingDots()
-                                else
-                                  MarkdownBody(
-                                    data: message.text,
-                                    selectable: false,
-                                    shrinkWrap: true,
-                                    styleSheet: MarkdownStyleSheet(
-                                      p: messageTextStyle,
-                                      h1: messageTextStyle.copyWith(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
+                          child: SelectionArea(
+                            onSelectionChanged: (SelectedContent? content) {
+                              setState(() {
+                                _selectedContent = content;
+                              });
+                            },
+                            contextMenuBuilder: (BuildContext context,
+                                SelectableRegionState selectableRegionState) {
+                              return _buildSelectionMenu(
+                                context,
+                                selectableRegionState,
+                                message,
+                                app,
+                                conversation.id,
+                              );
+                            },
+                            child: Builder(
+                              builder: (BuildContext context) {
+                                TapDownDetails? lastDoubleTapDownDetails;
+                                return GestureDetector(
+                                  onLongPress: onAssistantLongPress,
+                                  onDoubleTapDown: (TapDownDetails details) {
+                                    lastDoubleTapDownDetails = details;
+                                  },
+                                  onDoubleTap: () {
+                                    if (fromUser) {
+                                      return;
+                                    }
+                                    unawaited(
+                                      _onAssistantMessageDoubleTap(
+                                        context: context,
+                                        message: message,
+                                        messageTextStyle: messageTextStyle,
+                                        details: lastDoubleTapDownDetails,
                                       ),
-                                      h2: messageTextStyle.copyWith(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
-                                      ),
-                                      h3: messageTextStyle.copyWith(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.5,
-                                      ),
-                                      listBullet: messageTextStyle,
-                                      strong: messageTextStyle.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      em: messageTextStyle.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                      blockquote: messageTextStyle.copyWith(
-                                        color: const Color(0xFF374151),
-                                      ),
-                                      code: messageTextStyle.copyWith(
-                                        fontFamily: 'Menlo',
-                                        fontFamilyFallback: const <String>[
-                                          'Monaco',
-                                          'Consolas',
-                                        ],
-                                        fontSize: 14,
-                                        height: 1.5,
-                                      ),
-                                      codeblockPadding: const EdgeInsets.all(10),
-                                      codeblockDecoration: BoxDecoration(
-                                        color: const Color(0xFFEFF2F7),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      horizontalRuleDecoration: const BoxDecoration(
-                                        border: Border(
-                                          top: BorderSide(
-                                            width: 1,
-                                            color: Color(0xFFD1D5DB),
-                                          ),
-                                        ),
-                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 9,
                                     ),
-                                  ),
-                                if (message.tags.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    children: message.tags
-                                        .map(
-                                          (String tag) => Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFE9F1FF),
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                            child: Text(
-                                              tag,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Color(0xFF4C84FF),
+                                    decoration: BoxDecoration(
+                                      color: bubbleColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        if (!fromUser &&
+                                            message.id == _streamingMsgId &&
+                                            message.text.isEmpty)
+                                          const ThinkingDots()
+                                        else
+                                          MarkdownBody(
+                                            data: message.text,
+                                            selectable: false,
+                                            shrinkWrap: true,
+                                            styleSheet: MarkdownStyleSheet(
+                                              p: messageTextStyle,
+                                              h1: messageTextStyle.copyWith(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.5,
+                                              ),
+                                              h2: messageTextStyle.copyWith(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                                height: 1.5,
+                                              ),
+                                              h3: messageTextStyle.copyWith(
+                                                fontSize: 17,
+                                                fontWeight: FontWeight.w600,
+                                                height: 1.5,
+                                              ),
+                                              listBullet: messageTextStyle,
+                                              strong: messageTextStyle.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                              em: messageTextStyle.copyWith(
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                              blockquote:
+                                                  messageTextStyle.copyWith(
+                                                color: const Color(0xFF374151),
+                                              ),
+                                              code: messageTextStyle.copyWith(
+                                                fontFamily: 'Menlo',
+                                                fontFamilyFallback:
+                                                    const <String>[
+                                                  'Monaco',
+                                                  'Consolas',
+                                                ],
+                                                fontSize: 14,
+                                                height: 1.5,
+                                              ),
+                                              codeblockPadding:
+                                                  const EdgeInsets.all(10),
+                                              codeblockDecoration:
+                                                  BoxDecoration(
+                                                color: const Color(0xFFEFF2F7),
+                                                borderRadius:
+                                                    BorderRadius.circular(6),
+                                              ),
+                                              horizontalRuleDecoration:
+                                                  const BoxDecoration(
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    width: 1,
+                                                    color: Color(0xFFD1D5DB),
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        )
-                                        .toList(),
+                                        if (message.tags.isNotEmpty) ...<Widget>[
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 6,
+                                            children: message.tags
+                                                .map(
+                                                  (String tag) => Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFE9F1FF),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              10),
+                                                    ),
+                                                    child: Text(
+                                                      tag,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                        color:
+                                                            Color(0xFF4C84FF),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
                                   ),
-                                ],
-                              ],
+                                );
+                              },
                             ),
                           ),
-                        ),
+
+                      ),
                         if (fromUser) ...<Widget>[
                           const SizedBox(width: 8),
                           CircleAvatar(
@@ -1203,6 +1258,185 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSelectionMenu(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+    ChatMessage message,
+    AppState app,
+    int conversationId,
+  ) {
+    final bool isUser = message.fromUser;
+
+    return AdaptiveTextSelectionToolbar(
+      anchors: selectableRegionState.contextMenuAnchors,
+      children: <Widget>[
+        Container(
+          height: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFF2C2C2C),
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: <BoxShadow>[
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _buildSelectionButton(
+                label: '复制',
+                onPressed: () {
+                  selectableRegionState
+                      .copySelection(SelectionChangedCause.toolbar);
+                  selectableRegionState.hideToolbar();
+                },
+              ),
+              if (!isUser) ...<Widget>[
+                Container(
+                  width: 0.5,
+                  height: 20,
+                  color: Colors.white24,
+                ),
+                _buildSelectionButton(
+                  label: '追问',
+                  onPressed: () {
+                    final String text = _selectedContent?.plainText ?? '';
+                    if (text.isNotEmpty) {
+                      setState(() {
+                        _quotedAssistantText = text.trim();
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('已添加选中的内容作为追问引用')),
+                      );
+                    }
+                    selectableRegionState.hideToolbar();
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _onAssistantMessageDoubleTap({
+    required BuildContext context,
+    required ChatMessage message,
+    required TextStyle messageTextStyle,
+    required TapDownDetails? details,
+  }) async {
+    final String selectedLine = _resolveTappedLineText(
+      messageText: message.text,
+      messageTextStyle: messageTextStyle,
+      details: details,
+    );
+    if (selectedLine.isEmpty) return;
+
+    setState(() {
+      _selectedContent = SelectedContent(plainText: selectedLine);
+    });
+
+    final OverlayState? overlayState = Overlay.maybeOf(context);
+    if (overlayState == null) return;
+    final RenderBox overlayBox =
+        overlayState.context.findRenderObject()! as RenderBox;
+    final Offset anchor = details?.globalPosition ??
+        overlayBox.localToGlobal(overlayBox.size.center(Offset.zero));
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromLTWH(anchor.dx, anchor.dy, 1, 1),
+      Offset.zero & overlayBox.size,
+    );
+
+    final String? action = await showMenu<String>(
+      context: context,
+      position: position,
+      items: const <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Text('复制'),
+        ),
+        PopupMenuItem<String>(
+          value: 'followup',
+          child: Text('追问'),
+        ),
+      ],
+    );
+
+    if (!mounted || action == null) return;
+
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: selectedLine));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        this.context,
+      ).showSnackBar(const SnackBar(content: Text('已复制选中行')));
+    } else if (action == 'followup') {
+      setState(() {
+        _quotedAssistantText = selectedLine;
+      });
+      ScaffoldMessenger.of(
+        this.context,
+      ).showSnackBar(const SnackBar(content: Text('已添加选中行作为追问引用')));
+    }
+  }
+
+  String _resolveTappedLineText({
+    required String messageText,
+    required TextStyle messageTextStyle,
+    required TapDownDetails? details,
+  }) {
+    final String normalized =
+        messageText.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final List<String> lines = normalized.split('\n');
+    if (lines.isEmpty) return '';
+    if (details == null) return normalized.trim();
+
+    const double verticalPadding = 9;
+    final double lineHeight =
+        (messageTextStyle.fontSize ?? 16) * (messageTextStyle.height ?? 1.6);
+    final double y = (details.localPosition.dy - verticalPadding).clamp(
+      0.0,
+      double.infinity,
+    );
+    int index = (y / lineHeight).floor();
+    if (index < 0) index = 0;
+    if (index >= lines.length) index = lines.length - 1;
+
+    final String current = lines[index].trim();
+    if (current.isNotEmpty) return current;
+
+    for (final String line in lines) {
+      final String trimmed = line.trim();
+      if (trimmed.isNotEmpty) return trimmed;
+    }
+    return normalized.trim();
+  }
+
+  Widget _buildSelectionButton({
+    required String label,
+    required VoidCallback onPressed,
+  }) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        minimumSize: const Size(60, 44),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        textStyle: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      child: Text(label),
     );
   }
 
