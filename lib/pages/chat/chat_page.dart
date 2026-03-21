@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -40,6 +41,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final List<ChatAttachment> _pendingAttachments = <ChatAttachment>[];
   String? _quotedAssistantText;
   bool _streamInterruptedByLifecycle = false;
+  int? _doubleTapSelectedMessageId;
+  _LineSelection? _doubleTapLineSelection;
+  final Map<int, GlobalKey> _assistantMessageContentKeys = <int, GlobalKey>{};
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
   static const int _maxStreamRetries = 2;
@@ -428,13 +432,21 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
               itemBuilder: (BuildContext context, int index) {
                 final ChatMessage message = conversation.messages[index];
                 final bool fromUser = message.fromUser;
+                final double maxBubbleWidth =
+                    MediaQuery.of(context).size.width * 0.68;
+                final GlobalKey? assistantContentKey = fromUser
+                    ? null
+                    : _assistantMessageContentKeys.putIfAbsent(
+                        message.id,
+                        () => GlobalKey(),
+                      );
                 final VoidCallback? onAssistantLongPress = fromUser
                     ? null
                     : () => _onLongPressAssistantMessage(
-                          app,
-                          conversation.id,
-                          message,
-                        );
+                        app,
+                        conversation.id,
+                        message,
+                      );
                 final Color bubbleColor = fromUser
                     ? const Color(0xFF4C84FF)
                     : const Color(0xFFF5F6FA);
@@ -464,6 +476,18 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onLongPress: onAssistantLongPress,
+                    onDoubleTapDown: fromUser
+                        ? null
+                        : (TapDownDetails details) {
+                            unawaited(
+                              _onDoubleTapAssistantMessage(
+                                details: details,
+                                message: message,
+                                contentKey: assistantContentKey!,
+                                messageTextStyle: messageTextStyle,
+                              ),
+                            );
+                          },
                     child: Row(
                       mainAxisAlignment: fromUser
                           ? MainAxisAlignment.end
@@ -483,9 +507,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           const SizedBox(width: 8),
                         ],
                         ConstrainedBox(
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.68,
-                          ),
+                          constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
@@ -503,60 +525,113 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     message.text.isEmpty)
                                   const ThinkingDots()
                                 else
-                                  MarkdownBody(
-                                    data: message.text,
-                                    selectable: false,
-                                    shrinkWrap: true,
-                                    styleSheet: MarkdownStyleSheet(
-                                      p: messageTextStyle,
-                                      h1: messageTextStyle.copyWith(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
-                                      ),
-                                      h2: messageTextStyle.copyWith(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
-                                      ),
-                                      h3: messageTextStyle.copyWith(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.5,
-                                      ),
-                                      listBullet: messageTextStyle,
-                                      strong: messageTextStyle.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      em: messageTextStyle.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                      blockquote: messageTextStyle.copyWith(
-                                        color: const Color(0xFF374151),
-                                      ),
-                                      code: messageTextStyle.copyWith(
-                                        fontFamily: 'Menlo',
-                                        fontFamilyFallback: const <String>[
-                                          'Monaco',
-                                          'Consolas',
-                                        ],
-                                        fontSize: 14,
-                                        height: 1.5,
-                                      ),
-                                      codeblockPadding: const EdgeInsets.all(10),
-                                      codeblockDecoration: BoxDecoration(
-                                        color: const Color(0xFFEFF2F7),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      horizontalRuleDecoration: const BoxDecoration(
-                                        border: Border(
-                                          top: BorderSide(
-                                            width: 1,
-                                            color: Color(0xFFD1D5DB),
+                                  Builder(
+                                    builder: (BuildContext context) {
+                                      final Widget markdown = MarkdownBody(
+                                        data: message.text,
+                                        selectable: false,
+                                        shrinkWrap: true,
+                                        styleSheet: MarkdownStyleSheet(
+                                          p: messageTextStyle,
+                                          h1: messageTextStyle.copyWith(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.5,
                                           ),
+                                          h2: messageTextStyle.copyWith(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.5,
+                                          ),
+                                          h3: messageTextStyle.copyWith(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.5,
+                                          ),
+                                          listBullet: messageTextStyle,
+                                          strong: messageTextStyle.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          em: messageTextStyle.copyWith(
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                          blockquote: messageTextStyle.copyWith(
+                                            color: const Color(0xFF374151),
+                                          ),
+                                          code: messageTextStyle.copyWith(
+                                            fontFamily: 'Menlo',
+                                            fontFamilyFallback: const <String>[
+                                              'Monaco',
+                                              'Consolas',
+                                            ],
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                          codeblockPadding:
+                                              const EdgeInsets.all(10),
+                                          codeblockDecoration: BoxDecoration(
+                                            color: const Color(0xFFEFF2F7),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
+                                          horizontalRuleDecoration:
+                                              const BoxDecoration(
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    width: 1,
+                                                    color: Color(0xFFD1D5DB),
+                                                  ),
+                                                ),
+                                              ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                      final bool showLineHighlight =
+                                          !fromUser &&
+                                          _doubleTapSelectedMessageId ==
+                                              message.id &&
+                                          _doubleTapLineSelection != null;
+                                      final Widget content = showLineHighlight
+                                          ? ClipRRect(
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              child: Stack(
+                                                children: <Widget>[
+                                                  Positioned(
+                                                    top:
+                                                        _doubleTapLineSelection!
+                                                            .top,
+                                                    left:
+                                                        _doubleTapLineSelection!
+                                                            .left,
+                                                    child: Container(
+                                                      width:
+                                                          _doubleTapLineSelection!
+                                                              .width,
+                                                      height:
+                                                          _doubleTapLineSelection!
+                                                              .height,
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(
+                                                          0x6E9CC9FF,
+                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius.circular(
+                                                              2,
+                                                            ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  markdown,
+                                                ],
+                                              ),
+                                            )
+                                          : markdown;
+                                      return Container(
+                                        key: assistantContentKey,
+                                        child: content,
+                                      );
+                                    },
                                   ),
                                 if (message.tags.isNotEmpty) ...<Widget>[
                                   const SizedBox(height: 8),
@@ -961,7 +1036,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           }
           break;
         } catch (e) {
-          final bool shouldRetry = _shouldRetryStreamError(e) &&
+          final bool shouldRetry =
+              _shouldRetryStreamError(e) &&
               attempt <= _maxStreamRetries &&
               mounted;
           if (!shouldRetry) rethrow;
@@ -1231,25 +1307,41 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   title: '打标签',
                   action: 'tag',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.star_border,
                   title: '收藏',
                   action: 'favorite',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.ios_share,
                   title: '导出',
                   action: 'export',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.copy_outlined,
                   title: '复制',
                   action: 'copy',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.reply_rounded,
                   title: '追问',
@@ -1265,18 +1357,9 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     if (!mounted || action == null) return;
 
     if (action == 'copy') {
-      await Clipboard.setData(ClipboardData(text: message.text));
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+      await _handleQuickTextAction(action: action, text: message.text);
     } else if (action == 'followup') {
-      setState(() {
-        _quotedAssistantText = message.text.trim();
-      });
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已添加追问内容，输入问题后发送')));
+      await _handleQuickTextAction(action: action, text: message.text);
     } else if (action == 'tag') {
       await _showTagSheet(context, conversationId, message.id);
     } else if (action == 'favorite') {
@@ -1292,6 +1375,305 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('已导出内容（示例）')));
+    }
+  }
+
+  Future<void> _onDoubleTapAssistantMessage({
+    required TapDownDetails details,
+    required ChatMessage message,
+    required GlobalKey contentKey,
+    required TextStyle messageTextStyle,
+  }) async {
+    final BuildContext? contentContext = contentKey.currentContext;
+    if (contentContext == null) return;
+    final RenderObject? renderObject = contentContext.findRenderObject();
+    if (renderObject is! RenderBox) return;
+    final Offset contentLocalOffset = renderObject.globalToLocal(
+      details.globalPosition,
+    );
+    final double maxTextWidth = math.max(1, renderObject.size.width);
+    final _LineSelection lineSelection = _resolveSnippetSelectionByTap(
+      text: message.text,
+      localOffset: contentLocalOffset,
+      textStyle: messageTextStyle,
+      maxTextWidth: maxTextWidth,
+    );
+    if (!mounted || lineSelection.text.isEmpty) return;
+    setState(() {
+      _doubleTapSelectedMessageId = message.id;
+      _doubleTapLineSelection = lineSelection;
+    });
+
+    final String? action = await _showDoubleTapActionDialog(
+      details.globalPosition,
+    );
+    if (!mounted) return;
+    if (action == 'copy' || action == 'followup') {
+      await _handleQuickTextAction(action: action!, text: lineSelection.text);
+    }
+    if (!mounted) return;
+    setState(() {
+      _doubleTapSelectedMessageId = null;
+      _doubleTapLineSelection = null;
+    });
+  }
+
+  Future<String?> _showDoubleTapActionDialog(Offset anchorGlobalPosition) {
+    return showGeneralDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'QuickActions',
+      barrierColor: Colors.transparent,
+      transitionDuration: const Duration(milliseconds: 120),
+      pageBuilder:
+          (
+            BuildContext dialogContext,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) {
+            final Size screenSize = MediaQuery.of(dialogContext).size;
+            const double panelWidth = 164;
+            const double panelHeight = 76;
+            final double left = (anchorGlobalPosition.dx - panelWidth / 2)
+                .clamp(12.0, screenSize.width - panelWidth - 12);
+            final double top = (anchorGlobalPosition.dy - panelHeight - 14)
+                .clamp(56.0, screenSize.height - panelHeight - 12);
+
+            return Material(
+              type: MaterialType.transparency,
+              child: Stack(
+                children: <Widget>[
+                  Positioned(
+                    left: left,
+                    top: top,
+                    child: Container(
+                      width: panelWidth,
+                      height: panelHeight,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: const <BoxShadow>[
+                          BoxShadow(
+                            color: Color(0x2D1E2430),
+                            blurRadius: 18,
+                            offset: Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: _buildQuickActionItem(
+                              icon: Icons.copy_outlined,
+                              title: '复制',
+                              action: 'copy',
+                            ),
+                          ),
+                          const VerticalDivider(
+                            width: 1,
+                            thickness: 0.6,
+                            color: Color(0xFFE9E9EC),
+                          ),
+                          Expanded(
+                            child: _buildQuickActionItem(
+                              icon: Icons.reply_rounded,
+                              title: '追问',
+                              action: 'followup',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+    );
+  }
+
+  Widget _buildQuickActionItem({
+    required IconData icon,
+    required String title,
+    required String action,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.of(context).pop(action),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          Icon(icon, size: 22, color: const Color(0xFF1D1F24)),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF1D1F24),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  _LineSelection _resolveSnippetSelectionByTap({
+    required String text,
+    required Offset localOffset,
+    required TextStyle textStyle,
+    required double maxTextWidth,
+  }) {
+    final String normalized = text.replaceAll('\r\n', '\n');
+    final String normalizedTrimmed = normalized.trim();
+    if (normalizedTrimmed.isEmpty) {
+      return const _LineSelection(
+        text: '',
+        top: 0,
+        height: 0,
+        left: 0,
+        width: 0,
+      );
+    }
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: normalized, style: textStyle),
+      textDirection: Directionality.of(context),
+      textWidthBasis: TextWidthBasis.parent,
+    )..layout(maxWidth: math.max(1, maxTextWidth));
+    final List<LineMetrics> lines = textPainter.computeLineMetrics();
+    if (lines.isEmpty) {
+      return _LineSelection(
+        text: normalizedTrimmed,
+        top: 0,
+        height: textPainter.preferredLineHeight,
+        left: 0,
+        width: math.min(maxTextWidth, textPainter.width),
+      );
+    }
+
+    final double clampedY = localOffset.dy.clamp(
+      0.0,
+      math.max(0, textPainter.height - 1),
+    );
+    LineMetrics selectedLine = lines.first;
+    for (final LineMetrics line in lines) {
+      final double top = line.baseline - line.ascent;
+      final double bottom = top + line.height;
+      if (clampedY >= top && clampedY <= bottom) {
+        selectedLine = line;
+        break;
+      }
+    }
+    final TextPosition hitPosition = textPainter.getPositionForOffset(
+      Offset(localOffset.dx.clamp(0, maxTextWidth), clampedY),
+    );
+    final TextRange lineRange = textPainter.getLineBoundary(hitPosition);
+    final int lineStart = lineRange.start.clamp(0, normalized.length);
+    final int lineEnd = lineRange.end.clamp(0, normalized.length);
+    final int center = hitPosition.offset.clamp(lineStart, lineEnd);
+    final int? anchor = _findNearestSelectableOffset(
+      text: normalized,
+      center: center,
+      minOffset: lineStart,
+      maxOffsetExclusive: lineEnd,
+    );
+    if (anchor == null) {
+      return _LineSelection(
+        text: '',
+        top: (selectedLine.baseline - selectedLine.ascent).clamp(
+          0.0,
+          math.max(0, textPainter.height - selectedLine.height),
+        ),
+        height: selectedLine.height,
+        left: 0,
+        width: 0,
+      );
+    }
+    final int start = math.max(lineStart, anchor - 8);
+    final int end = math.min(lineEnd, anchor + 9);
+    final String selectedText = normalized.substring(start, end).trim();
+    if (selectedText.isEmpty) {
+      return _LineSelection(
+        text: '',
+        top: (selectedLine.baseline - selectedLine.ascent).clamp(
+          0.0,
+          math.max(0, textPainter.height - selectedLine.height),
+        ),
+        height: selectedLine.height,
+        left: 0,
+        width: 0,
+      );
+    }
+    final double startDx = textPainter
+        .getOffsetForCaret(TextPosition(offset: start), Rect.zero)
+        .dx;
+    final double endDx = textPainter
+        .getOffsetForCaret(TextPosition(offset: end), Rect.zero)
+        .dx;
+    final double lineTop = (selectedLine.baseline - selectedLine.ascent).clamp(
+      0.0,
+      math.max(0, textPainter.height - selectedLine.height),
+    );
+    return _LineSelection(
+      text: selectedText,
+      top: lineTop,
+      height: selectedLine.height,
+      left: startDx.clamp(0.0, maxTextWidth),
+      width: math.max(1, (endDx - startDx).abs()),
+    );
+  }
+
+  int? _findNearestSelectableOffset({
+    required String text,
+    required int center,
+    required int minOffset,
+    required int maxOffsetExclusive,
+  }) {
+    if (minOffset >= maxOffsetExclusive) return null;
+    final int clampedCenter = center.clamp(minOffset, maxOffsetExclusive - 1);
+    bool isSelectable(String char) =>
+        char != '\n' && char != '\r' && char.trim().isNotEmpty;
+
+    if (isSelectable(text[clampedCenter])) return clampedCenter;
+    for (
+      int distance = 1;
+      distance < maxOffsetExclusive - minOffset;
+      distance++
+    ) {
+      final int left = clampedCenter - distance;
+      final int right = clampedCenter + distance;
+      if (left >= minOffset && isSelectable(text[left])) return left;
+      if (right < maxOffsetExclusive && isSelectable(text[right])) return right;
+    }
+    return null;
+  }
+
+  Future<void> _handleQuickTextAction({
+    required String action,
+    required String text,
+  }) async {
+    final String normalized = text.trim();
+    if (normalized.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('当前行为空，无法执行该操作')));
+      return;
+    }
+    if (action == 'copy') {
+      await Clipboard.setData(ClipboardData(text: normalized));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+    } else if (action == 'followup') {
+      if (!mounted) return;
+      setState(() {
+        _quotedAssistantText = normalized;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已添加追问内容，输入问题后发送')));
     }
   }
 
@@ -1530,4 +1912,20 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       },
     );
   }
+}
+
+class _LineSelection {
+  const _LineSelection({
+    required this.text,
+    required this.top,
+    required this.height,
+    required this.left,
+    required this.width,
+  });
+
+  final String text;
+  final double top;
+  final double height;
+  final double left;
+  final double width;
 }
