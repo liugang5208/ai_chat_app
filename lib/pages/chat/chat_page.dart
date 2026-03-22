@@ -40,6 +40,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final List<ChatAttachment> _pendingAttachments = <ChatAttachment>[];
   String? _quotedAssistantText;
   bool _streamInterruptedByLifecycle = false;
+  String _selectedText = '';
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
   static const int _maxStreamRetries = 2;
@@ -503,60 +504,97 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                     message.text.isEmpty)
                                   const ThinkingDots()
                                 else
-                                  MarkdownBody(
-                                    data: message.text,
-                                    selectable: false,
-                                    shrinkWrap: true,
-                                    styleSheet: MarkdownStyleSheet(
-                                      p: messageTextStyle,
-                                      h1: messageTextStyle.copyWith(
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
-                                      ),
-                                      h2: messageTextStyle.copyWith(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w700,
-                                        height: 1.5,
-                                      ),
-                                      h3: messageTextStyle.copyWith(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w600,
-                                        height: 1.5,
-                                      ),
-                                      listBullet: messageTextStyle,
-                                      strong: messageTextStyle.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                      em: messageTextStyle.copyWith(
-                                        fontStyle: FontStyle.italic,
-                                      ),
-                                      blockquote: messageTextStyle.copyWith(
-                                        color: const Color(0xFF374151),
-                                      ),
-                                      code: messageTextStyle.copyWith(
-                                        fontFamily: 'Menlo',
-                                        fontFamilyFallback: const <String>[
-                                          'Monaco',
-                                          'Consolas',
-                                        ],
-                                        fontSize: 14,
-                                        height: 1.5,
-                                      ),
-                                      codeblockPadding: const EdgeInsets.all(10),
-                                      codeblockDecoration: BoxDecoration(
-                                        color: const Color(0xFFEFF2F7),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      horizontalRuleDecoration: const BoxDecoration(
-                                        border: Border(
-                                          top: BorderSide(
-                                            width: 1,
-                                            color: Color(0xFFD1D5DB),
+                                  Builder(
+                                    builder: (BuildContext innerContext) {
+                                      final Widget md = MarkdownBody(
+                                        data: message.text,
+                                        selectable: false,
+                                        shrinkWrap: true,
+                                        styleSheet: MarkdownStyleSheet(
+                                          p: messageTextStyle,
+                                          h1: messageTextStyle.copyWith(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.5,
+                                          ),
+                                          h2: messageTextStyle.copyWith(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w700,
+                                            height: 1.5,
+                                          ),
+                                          h3: messageTextStyle.copyWith(
+                                            fontSize: 17,
+                                            fontWeight: FontWeight.w600,
+                                            height: 1.5,
+                                          ),
+                                          listBullet: messageTextStyle,
+                                          strong: messageTextStyle.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          em: messageTextStyle.copyWith(
+                                            fontStyle: FontStyle.italic,
+                                          ),
+                                          blockquote: messageTextStyle.copyWith(
+                                            color: const Color(0xFF374151),
+                                          ),
+                                          code: messageTextStyle.copyWith(
+                                            fontFamily: 'Menlo',
+                                            fontFamilyFallback: const <String>[
+                                              'Monaco',
+                                              'Consolas',
+                                            ],
+                                            fontSize: 14,
+                                            height: 1.5,
+                                          ),
+                                          codeblockPadding:
+                                              const EdgeInsets.all(10),
+                                          codeblockDecoration: BoxDecoration(
+                                            color: const Color(0xFFEFF2F7),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          horizontalRuleDecoration:
+                                              const BoxDecoration(
+                                            border: Border(
+                                              top: BorderSide(
+                                                width: 1,
+                                                color: Color(0xFFD1D5DB),
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ),
+                                      );
+                                      if (fromUser) return md;
+                                      return Stack(
+                                        children: <Widget>[
+                                          SelectionArea(
+                                            onSelectionChanged: (content) {
+                                              _selectedText =
+                                                  content?.plainText ?? '';
+                                            },
+                                            contextMenuBuilder: (
+                                              BuildContext menuContext,
+                                              SelectableRegionState
+                                                  selectableRegionState,
+                                            ) {
+                                              return _buildSelectionToolbar(
+                                                menuContext,
+                                                selectableRegionState,
+                                              );
+                                            },
+                                            child: md,
+                                          ),
+                                          Positioned.fill(
+                                            child: GestureDetector(
+                                              behavior:
+                                                  HitTestBehavior.translucent,
+                                              onLongPress:
+                                                  onAssistantLongPress,
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    },
                                   ),
                                 if (message.tags.isNotEmpty) ...<Widget>[
                                   const SizedBox(height: 8),
@@ -1203,6 +1241,47 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           },
         );
       },
+    );
+  }
+
+  Widget _buildSelectionToolbar(
+    BuildContext context,
+    SelectableRegionState selectableRegionState,
+  ) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: selectableRegionState.contextMenuAnchors,
+      buttonItems: <ContextMenuButtonItem>[
+        ContextMenuButtonItem(
+          label: '复制',
+          onPressed: () {
+            if (_selectedText.isNotEmpty) {
+              Clipboard.setData(ClipboardData(text: _selectedText));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已复制到剪贴板')),
+                );
+              }
+            }
+            selectableRegionState.hideToolbar();
+          },
+        ),
+        ContextMenuButtonItem(
+          label: '追问',
+          onPressed: () {
+            if (_selectedText.isNotEmpty) {
+              setState(() {
+                _quotedAssistantText = _selectedText.trim();
+              });
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('已添加追问内容，输入问题后发送')),
+                );
+              }
+            }
+            selectableRegionState.hideToolbar();
+          },
+        ),
+      ],
     );
   }
 
