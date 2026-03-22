@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter/rendering.dart'
+    show GranularlyExtendSelectionEvent, SelectionHandler, TextGranularity;
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
@@ -24,6 +26,20 @@ class ChatPage extends StatefulWidget {
   State<ChatPage> createState() => _ChatPageState();
 }
 
+class _SelectionExpansionResult {
+  const _SelectionExpansionResult({
+    required this.expandedText,
+    required this.expandLeft,
+    required this.expandRight,
+  });
+
+  final String expandedText;
+  final int expandLeft;
+  final int expandRight;
+
+  bool get shouldExpandHighlight => expandLeft > 0 || expandRight > 0;
+}
+
 class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   final TextEditingController _controller = TextEditingController();
   final TextEditingController _titleController = TextEditingController();
@@ -41,9 +57,25 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
   String? _quotedAssistantText;
   bool _streamInterruptedByLifecycle = false;
   String _selectedText = '';
+  bool _isProgrammaticSelectionAdjusting = false;
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
   static const int _maxStreamRetries = 2;
+  static const Set<String> _selectionStopChars = <String>{
+    '：',
+    '，',
+    '。',
+    '；',
+    '！',
+    '？',
+    ':',
+    ',',
+    '.',
+    ';',
+    '!',
+    '?',
+    '\n',
+  };
 
   @override
   void initState() {
@@ -432,10 +464,10 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                 final VoidCallback? onAssistantLongPress = fromUser
                     ? null
                     : () => _onLongPressAssistantMessage(
-                          app,
-                          conversation.id,
-                          message,
-                        );
+                        app,
+                        conversation.id,
+                        message,
+                      );
                 final Color bubbleColor = fromUser
                     ? const Color(0xFF4C84FF)
                     : const Color(0xFFF5F6FA);
@@ -550,46 +582,71 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                                               const EdgeInsets.all(10),
                                           codeblockDecoration: BoxDecoration(
                                             color: const Color(0xFFEFF2F7),
-                                            borderRadius:
-                                                BorderRadius.circular(6),
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
                                           ),
                                           horizontalRuleDecoration:
                                               const BoxDecoration(
-                                            border: Border(
-                                              top: BorderSide(
-                                                width: 1,
-                                                color: Color(0xFFD1D5DB),
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    width: 1,
+                                                    color: Color(0xFFD1D5DB),
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
                                         ),
                                       );
                                       if (fromUser) return md;
+                                      final GlobalKey selectionContentKey =
+                                          GlobalKey();
                                       return Stack(
                                         children: <Widget>[
                                           SelectionArea(
                                             onSelectionChanged: (content) {
-                                              _selectedText =
-                                                  content?.plainText ?? '';
-                                            },
-                                            contextMenuBuilder: (
-                                              BuildContext menuContext,
-                                              SelectableRegionState
-                                                  selectableRegionState,
-                                            ) {
-                                              return _buildSelectionToolbar(
-                                                menuContext,
-                                                selectableRegionState,
+                                              final _SelectionExpansionResult
+                                              expansion = _expandSelectedText(
+                                                sourceText: message.text,
+                                                selectedText:
+                                                    content?.plainText ?? '',
                                               );
+                                              _selectedText =
+                                                  expansion.expandedText;
+                                              if (!_isProgrammaticSelectionAdjusting &&
+                                                  expansion
+                                                      .shouldExpandHighlight) {
+                                                _expandSelectionHighlight(
+                                                  selectionContext:
+                                                      selectionContentKey
+                                                          .currentContext,
+                                                  expandLeft:
+                                                      expansion.expandLeft,
+                                                  expandRight:
+                                                      expansion.expandRight,
+                                                );
+                                              }
                                             },
-                                            child: md,
+                                            contextMenuBuilder:
+                                                (
+                                                  BuildContext menuContext,
+                                                  SelectableRegionState
+                                                  selectableRegionState,
+                                                ) {
+                                                  return _buildSelectionToolbar(
+                                                    menuContext,
+                                                    selectableRegionState,
+                                                  );
+                                                },
+                                            child: KeyedSubtree(
+                                              key: selectionContentKey,
+                                              child: md,
+                                            ),
                                           ),
                                           Positioned.fill(
                                             child: GestureDetector(
                                               behavior:
                                                   HitTestBehavior.translucent,
-                                              onLongPress:
-                                                  onAssistantLongPress,
+                                              onLongPress: onAssistantLongPress,
                                             ),
                                           ),
                                         ],
@@ -657,6 +714,102 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
         ],
       ),
     );
+  }
+
+  _SelectionExpansionResult _expandSelectedText({
+    required String sourceText,
+    required String selectedText,
+  }) {
+    final String selected = selectedText.trim();
+    if (selected.isEmpty) {
+      return const _SelectionExpansionResult(
+        expandedText: '',
+        expandLeft: 0,
+        expandRight: 0,
+      );
+    }
+
+    // Only auto-expand for double-tap-like short token selections.
+    final bool isSingleTokenLike =
+        selected.length <= 24 && !selected.contains(RegExp(r'\s'));
+    if (!isSingleTokenLike) {
+      return _SelectionExpansionResult(
+        expandedText: selected,
+        expandLeft: 0,
+        expandRight: 0,
+      );
+    }
+
+    final int selectedStart = sourceText.indexOf(selected);
+    if (selectedStart < 0) {
+      return _SelectionExpansionResult(
+        expandedText: selected,
+        expandLeft: 0,
+        expandRight: 0,
+      );
+    }
+
+    int start = selectedStart;
+    int end = selectedStart + selected.length;
+
+    int leftCount = 0;
+    while (start > 0 && leftCount < 8) {
+      final String ch = sourceText[start - 1];
+      if (_selectionStopChars.contains(ch)) break;
+      start -= 1;
+      leftCount += 1;
+    }
+
+    int rightCount = 0;
+    while (end < sourceText.length && rightCount < 8) {
+      final String ch = sourceText[end];
+      if (_selectionStopChars.contains(ch)) break;
+      end += 1;
+      rightCount += 1;
+    }
+
+    return _SelectionExpansionResult(
+      expandedText: sourceText.substring(start, end).trim(),
+      expandLeft: selectedStart - start,
+      expandRight: end - (selectedStart + selected.length),
+    );
+  }
+
+  void _expandSelectionHighlight({
+    required BuildContext? selectionContext,
+    required int expandLeft,
+    required int expandRight,
+  }) {
+    if (selectionContext == null) return;
+    if (expandLeft <= 0 && expandRight <= 0) return;
+
+    final Object? registrar = SelectionContainer.maybeOf(selectionContext);
+    if (registrar is! SelectionHandler) return;
+    final SelectionHandler handler = registrar;
+
+    _isProgrammaticSelectionAdjusting = true;
+    try {
+      for (int i = 0; i < expandLeft; i += 1) {
+        handler.dispatchSelectionEvent(
+          const GranularlyExtendSelectionEvent(
+            forward: false,
+            isEnd: false,
+            granularity: TextGranularity.character,
+          ),
+        );
+      }
+      for (int i = 0; i < expandRight; i += 1) {
+        handler.dispatchSelectionEvent(
+          const GranularlyExtendSelectionEvent(
+            forward: true,
+            isEnd: true,
+            granularity: TextGranularity.character,
+          ),
+        );
+      }
+    } finally {
+      _isProgrammaticSelectionAdjusting = false;
+    }
   }
 
   Widget _buildInputBar(AppState app, Conversation conversation) {
@@ -999,7 +1152,8 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
           }
           break;
         } catch (e) {
-          final bool shouldRetry = _shouldRetryStreamError(e) &&
+          final bool shouldRetry =
+              _shouldRetryStreamError(e) &&
               attempt <= _maxStreamRetries &&
               mounted;
           if (!shouldRetry) rethrow;
@@ -1248,40 +1402,112 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
     BuildContext context,
     SelectableRegionState selectableRegionState,
   ) {
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: selectableRegionState.contextMenuAnchors,
-      buttonItems: <ContextMenuButtonItem>[
-        ContextMenuButtonItem(
-          label: '复制',
-          onPressed: () {
-            if (_selectedText.isNotEmpty) {
-              Clipboard.setData(ClipboardData(text: _selectedText));
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已复制到剪贴板')),
-                );
-              }
-            }
-            selectableRegionState.hideToolbar();
-          },
-        ),
-        ContextMenuButtonItem(
-          label: '追问',
-          onPressed: () {
-            if (_selectedText.isNotEmpty) {
-              setState(() {
-                _quotedAssistantText = _selectedText.trim();
-              });
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('已添加追问内容，输入问题后发送')),
-                );
-              }
-            }
-            selectableRegionState.hideToolbar();
-          },
+    final TextSelectionToolbarAnchors anchors =
+        selectableRegionState.contextMenuAnchors;
+    return TextSelectionToolbar(
+      anchorAbove: anchors.primaryAnchor,
+      anchorBelow: anchors.secondaryAnchor ?? anchors.primaryAnchor,
+      children: <Widget>[
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1F1F3),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE3E3E8), width: 0.8),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x1A000000),
+                blurRadius: 10,
+                offset: Offset(0, 3),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              _buildSelectionToolbarAction(
+                icon: Icons.copy_rounded,
+                label: '复制',
+                onTap: () {
+                  if (_selectedText.isNotEmpty) {
+                    Clipboard.setData(ClipboardData(text: _selectedText));
+                    if (mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('已复制到剪贴板')));
+                    }
+                  }
+                  selectableRegionState.hideToolbar();
+                },
+              ),
+              _buildSelectionToolbarDivider(),
+              _buildSelectionToolbarAction(
+                icon: Icons.reply_rounded,
+                label: '追问',
+                onTap: () {
+                  if (_selectedText.isNotEmpty) {
+                    setState(() {
+                      _quotedAssistantText = _selectedText.trim();
+                    });
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('已添加追问内容，输入问题后发送')),
+                      );
+                    }
+                  }
+                  selectableRegionState.hideToolbar();
+                },
+              ),
+            ],
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSelectionToolbarDivider() {
+    return Container(
+      width: 1,
+      height: 28,
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      color: const Color(0xFFDADAE0),
+    );
+  }
+
+  Widget _buildSelectionToolbarAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: SizedBox(
+          width: 56,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Icon(icon, size: 16, color: const Color(0xFF1C1C1E)),
+                const SizedBox(height: 1),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    height: 1.0,
+                    fontWeight: FontWeight.w500,
+                    color: Color(0xFF1C1C1E),
+                  ),
+                  maxLines: 1,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1310,25 +1536,41 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                   title: '打标签',
                   action: 'tag',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.star_border,
                   title: '收藏',
                   action: 'favorite',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.ios_share,
                   title: '导出',
                   action: 'export',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.copy_outlined,
                   title: '复制',
                   action: 'copy',
                 ),
-                const Divider(height: 1, thickness: 0.6, color: Color(0xFFE9E9EC)),
+                const Divider(
+                  height: 1,
+                  thickness: 0.6,
+                  color: Color(0xFFE9E9EC),
+                ),
                 _buildActionTile(
                   icon: Icons.reply_rounded,
                   title: '追问',
