@@ -297,11 +297,13 @@ class AppState extends ChangeNotifier {
         .map((ChatMessage m) {
           final MessageKnowledgeEntry entry = m.knowledgeEntry!;
           return DocFile(
+            messageId: m.id,
             title: entry.question,
             preview: _buildPreview(entry.answer),
             timeText: friendlyDate(entry.collectedAt),
             detail: entry.answer,
             createdAt: entry.collectedAt,
+            tags: List<String>.from(m.tags),
             tagName: entry.tagName,
           );
         })
@@ -314,6 +316,36 @@ class AppState extends ChangeNotifier {
       return bTime.compareTo(aTime);
     });
     return files;
+  }
+
+  void removeTagsFromKnowledgeMessage({
+    required int conversationId,
+    required int messageId,
+    required List<String> tagNames,
+  }) {
+    if (tagNames.isEmpty) return;
+    final Set<String> toRemove = tagNames
+        .map((String t) => t.trim())
+        .where((String t) => t.isNotEmpty)
+        .toSet();
+    if (toRemove.isEmpty) return;
+
+    final Conversation c = getConversationById(conversationId);
+    final int index = c.messages.indexWhere(
+      (ChatMessage item) => item.id == messageId,
+    );
+    if (index < 0) return;
+    final ChatMessage message = c.messages[index];
+
+    message.tags.removeWhere((String t) => toRemove.contains(t));
+    if (toRemove.contains(message.knowledgeEntry?.tagName)) {
+      message.knowledgeEntry!.tagName = message.tags.isNotEmpty
+          ? message.tags.first
+          : null;
+    }
+
+    notifyListeners();
+    ConversationStorage.save(conversations, _nextConvId, _nextMsgId);
   }
 
   String _findLatestUserQuestionBefore(
