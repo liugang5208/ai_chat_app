@@ -61,6 +61,7 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
   static const int _maxAttachmentBytes = 5 * 1024 * 1024; // 5MB
   static const int _maxStreamRetries = 2;
+  static const int _maxHistoryRounds = 20;
   static const Set<String> _selectionStopChars = <String>{
     '：',
     '，',
@@ -1130,9 +1131,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
 
     try {
       final Conversation conv = app.getConversationById(conversationId);
-      final List<ChatMessage> history = conv.messages
+      final List<ChatMessage> fullHistory = conv.messages
           .where((ChatMessage m) => m.id != streamMsgId)
           .toList();
+      final List<ChatMessage> history = _limitHistoryToRecentRounds(
+        fullHistory,
+        maxRounds: _maxHistoryRounds,
+      );
 
       int attempt = 0;
       while (true) {
@@ -1180,6 +1185,29 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
       _streamInterruptedByLifecycle = false;
       app.saveConversations();
     }
+  }
+
+  List<ChatMessage> _limitHistoryToRecentRounds(
+    List<ChatMessage> history, {
+    required int maxRounds,
+  }) {
+    if (history.isEmpty || maxRounds <= 0) {
+      return <ChatMessage>[];
+    }
+
+    int userRounds = 0;
+    int startIndex = -1;
+    for (int i = history.length - 1; i >= 0; i -= 1) {
+      if (!history[i].fromUser) continue;
+      userRounds += 1;
+      if (userRounds == maxRounds) {
+        startIndex = i;
+        break;
+      }
+    }
+
+    if (startIndex <= 0) return List<ChatMessage>.from(history);
+    return history.sublist(startIndex);
   }
 
   bool _shouldRetryStreamError(Object error) {
