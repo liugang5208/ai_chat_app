@@ -44,13 +44,19 @@ class LocalAuthStorage {
     return File('${dir.path}/auth_users.json');
   }
 
+  static Future<File> _sessionFile() async {
+    final Directory dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/auth_session.json');
+  }
+
   static Future<List<LocalAuthUser>> loadUsers() async {
     try {
       final File file = await _file();
       if (!file.existsSync()) return <LocalAuthUser>[];
       final Map<String, dynamic> data =
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      final List<dynamic> users = (data['users'] as List<dynamic>?) ?? <dynamic>[];
+      final List<dynamic> users =
+          (data['users'] as List<dynamic>?) ?? <dynamic>[];
       return users
           .map((dynamic e) => LocalAuthUser.fromJson(e as Map<String, dynamic>))
           .toList();
@@ -61,9 +67,11 @@ class LocalAuthStorage {
 
   static Future<void> _saveUsers(List<LocalAuthUser> users) async {
     final File file = await _file();
-    await file.writeAsString(jsonEncode(<String, dynamic>{
-      'users': users.map((LocalAuthUser u) => u.toJson()).toList(),
-    }));
+    await file.writeAsString(
+      jsonEncode(<String, dynamic>{
+        'users': users.map((LocalAuthUser u) => u.toJson()).toList(),
+      }),
+    );
   }
 
   static Future<bool> registerUser({
@@ -112,7 +120,9 @@ class LocalAuthStorage {
   }) async {
     final String normalized = phone.trim();
     final List<LocalAuthUser> users = await loadUsers();
-    final int idx = users.indexWhere((LocalAuthUser u) => u.phone == normalized);
+    final int idx = users.indexWhere(
+      (LocalAuthUser u) => u.phone == normalized,
+    );
     if (idx < 0) return false;
     final String salt = _randomSalt();
     users[idx] = LocalAuthUser(
@@ -140,5 +150,40 @@ class LocalAuthStorage {
   static String _hashPassword(String password, String salt) {
     final List<int> bytes = utf8.encode('$salt::$password');
     return sha256.convert(bytes).toString();
+  }
+
+  static Future<void> saveLoginSession(String phone) async {
+    final File file = await _sessionFile();
+    await file.writeAsString(
+      jsonEncode(<String, dynamic>{
+        'phone': phone.trim(),
+        'loggedInAt': DateTime.now().toIso8601String(),
+      }),
+    );
+  }
+
+  static Future<String?> loadLoginPhone() async {
+    try {
+      final File file = await _sessionFile();
+      if (!file.existsSync()) return null;
+      final Map<String, dynamic> data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final String phone = (data['phone'] as String? ?? '').trim();
+      if (phone.isEmpty) return null;
+      final bool exists = await userExists(phone);
+      if (!exists) return null;
+      return phone;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<void> clearLoginSession() async {
+    try {
+      final File file = await _sessionFile();
+      if (file.existsSync()) {
+        await file.delete();
+      }
+    } catch (_) {}
   }
 }

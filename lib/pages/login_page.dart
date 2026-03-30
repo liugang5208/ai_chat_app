@@ -7,10 +7,7 @@ import 'main_shell_page.dart';
 enum _AuthMode { passwordLogin, register, resetPassword }
 
 class _SmsCode {
-  _SmsCode({
-    required this.value,
-    required this.expireAt,
-  });
+  _SmsCode({required this.value, required this.expireAt});
 
   final String value;
   final DateTime expireAt;
@@ -162,6 +159,7 @@ class _LoginPageState extends State<LoginPage> {
       _toast('手机号或密码错误');
       return;
     }
+    await LocalAuthStorage.saveLoginSession(phone);
     _goMainPage();
   }
 
@@ -342,7 +340,9 @@ class _LoginPageState extends State<LoginPage> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: active ? const Color(0xFF4C84FF) : const Color(0xFF8E95A5),
+                color: active
+                    ? const Color(0xFF4C84FF)
+                    : const Color(0xFF8E95A5),
               ),
             ),
           ),
@@ -363,7 +363,11 @@ class _LoginPageState extends State<LoginPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        _buildInput(controller: _phoneCtrl, hint: '请输入手机号', keyboardType: TextInputType.phone),
+        _buildInput(
+          controller: _phoneCtrl,
+          hint: '请输入手机号',
+          keyboardType: TextInputType.phone,
+        ),
         const SizedBox(height: 12),
         _buildInput(
           controller: _pwdCtrl,
@@ -391,7 +395,10 @@ class _LoginPageState extends State<LoginPage> {
                 _resetPhoneCtrl.text = _phoneCtrl.text.trim();
               });
             },
-            child: const Text('忘记密码?', style: TextStyle(color: Color(0xFF4C84FF))),
+            child: const Text(
+              '忘记密码?',
+              style: TextStyle(color: Color(0xFF4C84FF)),
+            ),
           ),
         ),
       ],
@@ -428,9 +435,8 @@ class _LoginPageState extends State<LoginPage> {
           hint: '请再次输入密码',
           obscureText: _obscureRegConfirmPwd,
           suffix: IconButton(
-            onPressed: () => setState(
-              () => _obscureRegConfirmPwd = !_obscureRegConfirmPwd,
-            ),
+            onPressed: () =>
+                setState(() => _obscureRegConfirmPwd = !_obscureRegConfirmPwd),
             icon: Icon(
               _obscureRegConfirmPwd
                   ? Icons.visibility_off_outlined
@@ -481,7 +487,8 @@ class _LoginPageState extends State<LoginPage> {
           hint: '请输入新密码',
           obscureText: _obscureResetPwd,
           suffix: IconButton(
-            onPressed: () => setState(() => _obscureResetPwd = !_obscureResetPwd),
+            onPressed: () =>
+                setState(() => _obscureResetPwd = !_obscureResetPwd),
             icon: Icon(
               _obscureResetPwd
                   ? Icons.visibility_off_outlined
@@ -518,7 +525,10 @@ class _LoginPageState extends State<LoginPage> {
                 _mode = _AuthMode.passwordLogin;
               });
             },
-            child: const Text('返回登录', style: TextStyle(color: Color(0xFF4C84FF))),
+            child: const Text(
+              '返回登录',
+              style: TextStyle(color: Color(0xFF4C84FF)),
+            ),
           ),
         ),
       ],
@@ -591,10 +601,7 @@ class _LoginPageState extends State<LoginPage> {
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: <Color>[
-              Color(0xFF6B8AFF),
-              Color(0xFF4DA0FF),
-            ],
+            colors: <Color>[Color(0xFF6B8AFF), Color(0xFF4DA0FF)],
           ),
           borderRadius: BorderRadius.circular(24),
         ),

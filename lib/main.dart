@@ -7,7 +7,9 @@ import 'app_state.dart';
 import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
 import 'storage/model_config_storage.dart';
+import 'storage/local_auth_storage.dart';
 import 'pages/login_page.dart';
+import 'pages/main_shell_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +21,8 @@ void main() async {
   ) = await ModelConfigStorage.load();
   final (:List<Conversation> conversations, :int nextConvId, :int nextMsgId) =
       await ConversationStorage.load();
+  final bool hasLoginSession =
+      (await LocalAuthStorage.loadLoginPhone()) != null;
   runApp(
     MyApp(
       initialTags: tags,
@@ -28,6 +32,7 @@ void main() async {
       initialConversations: conversations,
       initialNextConvId: nextConvId,
       initialNextMsgId: nextMsgId,
+      hasLoginSession: hasLoginSession,
     ),
   );
 }
@@ -42,6 +47,7 @@ class MyApp extends StatelessWidget {
     required this.initialConversations,
     required this.initialNextConvId,
     required this.initialNextMsgId,
+    required this.hasLoginSession,
   });
 
   final List<TagItem> initialTags;
@@ -51,6 +57,7 @@ class MyApp extends StatelessWidget {
   final List<Conversation> initialConversations;
   final int initialNextConvId;
   final int initialNextMsgId;
+  final bool hasLoginSession;
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +91,7 @@ class MyApp extends StatelessWidget {
           ),
           useMaterial3: true,
         ),
-        home: const LoginPage(),
+        home: hasLoginSession ? const MainShellPage() : const LoginPage(),
       ),
     );
   }

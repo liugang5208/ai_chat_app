@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'my_favorites_page.dart';
 import 'model_provider_page.dart';
 import '../login_page.dart';
+import '../../storage/local_auth_storage.dart';
 
 class MinePage extends StatelessWidget {
   const MinePage({super.key});
@@ -128,7 +129,9 @@ class MinePage extends StatelessWidget {
           ),
           const Divider(height: 1, color: Color(0xFFF5F6F8), indent: 84),
           InkWell(
-            onTap: () {
+            onTap: () async {
+              await LocalAuthStorage.clearLoginSession();
+              if (!context.mounted) return;
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute<void>(builder: (_) => const LoginPage()),
                 (Route<dynamic> route) => false,
