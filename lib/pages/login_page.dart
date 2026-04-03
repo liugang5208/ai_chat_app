@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../app_state.dart';
 import '../storage/local_auth_storage.dart';
+import '../testing/test_account_feature.dart';
 import 'main_shell_page.dart';
 
 enum _AuthMode { passwordLogin, register, resetPassword }
@@ -160,6 +162,10 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
     await LocalAuthStorage.saveLoginSession(phone);
+    if (!mounted) return;
+    if (TestAccountFeature.isTestPhone(phone)) {
+      TestAccountFeature.applyPresetToAppState(AppStateScope.of(context));
+    }
     _goMainPage();
   }
 

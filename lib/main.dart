@@ -8,27 +8,50 @@ import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
 import 'storage/model_config_storage.dart';
 import 'storage/local_auth_storage.dart';
+import 'testing/test_account_feature.dart';
 import 'pages/login_page.dart';
 import 'pages/main_shell_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final List<TagItem> tags = await TagStorage.load();
-  final (
-    :Map<String, ChatConfig> configs,
-    :String? activeVendor,
-    :List<VendorProfile> vendors,
-  ) = await ModelConfigStorage.load();
+  final ({
+    Map<String, ChatConfig> configs,
+    String? activeVendor,
+    List<VendorProfile> vendors,
+  })
+  loadedModelConfig = await ModelConfigStorage.load();
+  Map<String, ChatConfig> initialConfigs = Map<String, ChatConfig>.from(
+    loadedModelConfig.configs,
+  );
+  String? initialActiveVendor = loadedModelConfig.activeVendor;
+  List<VendorProfile> initialVendors = List<VendorProfile>.from(
+    loadedModelConfig.vendors,
+  );
   final (:List<Conversation> conversations, :int nextConvId, :int nextMsgId) =
       await ConversationStorage.load();
-  final bool hasLoginSession =
-      (await LocalAuthStorage.loadLoginPhone()) != null;
+  final String? loginPhone = await LocalAuthStorage.loadLoginPhone();
+  final ({
+    Map<String, ChatConfig> configs,
+    String? activeVendor,
+    List<VendorProfile> vendors,
+  })
+  patchedModelConfig = TestAccountFeature.applyPresetForLoginPhone(
+    loginPhone: loginPhone,
+    configs: initialConfigs,
+    activeVendor: initialActiveVendor,
+    vendors: initialVendors,
+  );
+  initialConfigs = patchedModelConfig.configs;
+  initialActiveVendor = patchedModelConfig.activeVendor;
+  initialVendors = patchedModelConfig.vendors;
+  final bool hasLoginSession = loginPhone != null;
   runApp(
     MyApp(
       initialTags: tags,
-      initialConfigs: configs,
-      initialActiveVendor: activeVendor,
-      initialVendors: vendors,
+      initialConfigs: initialConfigs,
+      initialActiveVendor: initialActiveVendor,
+      initialVendors: initialVendors,
       initialConversations: conversations,
       initialNextConvId: nextConvId,
       initialNextMsgId: nextMsgId,

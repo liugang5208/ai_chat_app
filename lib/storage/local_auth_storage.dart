@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:path_provider/path_provider.dart';
+import '../testing/test_account_feature.dart';
 
 class LocalAuthUser {
   LocalAuthUser({
@@ -79,6 +80,7 @@ class LocalAuthStorage {
     required String password,
   }) async {
     final String normalized = phone.trim();
+    if (TestAccountFeature.treatAsRegistered(normalized)) return false;
     final List<LocalAuthUser> users = await loadUsers();
     final bool exists = users.any((LocalAuthUser u) => u.phone == normalized);
     if (exists) return false;
@@ -101,6 +103,12 @@ class LocalAuthStorage {
     required String password,
   }) async {
     final String normalized = phone.trim();
+    if (TestAccountFeature.canDirectLogin(
+      phoneInput: normalized,
+      passwordInput: password,
+    )) {
+      return true;
+    }
     final List<LocalAuthUser> users = await loadUsers();
     final LocalAuthUser? user = _findByPhone(users, normalized);
     if (user == null) return false;
@@ -110,6 +118,7 @@ class LocalAuthStorage {
 
   static Future<bool> userExists(String phone) async {
     final String normalized = phone.trim();
+    if (TestAccountFeature.treatAsRegistered(normalized)) return true;
     final List<LocalAuthUser> users = await loadUsers();
     return _findByPhone(users, normalized) != null;
   }
