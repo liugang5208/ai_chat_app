@@ -50,6 +50,41 @@ class LocalAuthStorage {
     return File('${dir.path}/auth_session.json');
   }
 
+  static Future<File> _testAccountStateFile() async {
+    final Directory dir = await getApplicationDocumentsDirectory();
+    return File('${dir.path}/test_account_state.json');
+  }
+
+  static Future<bool> _isBuiltInTestAccountDisabled() async {
+    try {
+      final File file = await _testAccountStateFile();
+      if (!file.existsSync()) return false;
+      final Map<String, dynamic> data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      return (data['disabled'] as bool?) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> _setBuiltInTestAccountDisabled(bool disabled) async {
+    try {
+      final File file = await _testAccountStateFile();
+      await file.writeAsString(
+        jsonEncode(<String, dynamic>{
+          'disabled': disabled,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }),
+      );
+    } catch (_) {}
+  }
+
+  static Future<bool> shouldApplyTestAccountPreset(String phone) async {
+    final String normalized = phone.trim();
+    if (!TestAccountFeature.isTestPhone(normalized)) return false;
+    return !(await _isBuiltInTestAccountDisabled());
+  }
+
   static Future<List<LocalAuthUser>> loadUsers() async {
     try {
       final File file = await _file();
@@ -80,7 +115,7 @@ class LocalAuthStorage {
     required String password,
   }) async {
     final String normalized = phone.trim();
-    if (TestAccountFeature.treatAsRegistered(normalized)) return false;
+    if (await shouldApplyTestAccountPreset(normalized)) return false;
     final List<LocalAuthUser> users = await loadUsers();
     final bool exists = users.any((LocalAuthUser u) => u.phone == normalized);
     if (exists) return false;
@@ -95,6 +130,9 @@ class LocalAuthStorage {
       ),
     );
     await _saveUsers(users);
+    if (TestAccountFeature.isTestPhone(normalized)) {
+      await _setBuiltInTestAccountDisabled(true);
+    }
     return true;
   }
 
@@ -103,10 +141,11 @@ class LocalAuthStorage {
     required String password,
   }) async {
     final String normalized = phone.trim();
-    if (TestAccountFeature.canDirectLogin(
-      phoneInput: normalized,
-      passwordInput: password,
-    )) {
+    if (await shouldApplyTestAccountPreset(normalized) &&
+        TestAccountFeature.canDirectLogin(
+          phoneInput: normalized,
+          passwordInput: password,
+        )) {
       return true;
     }
     final List<LocalAuthUser> users = await loadUsers();
@@ -118,7 +157,7 @@ class LocalAuthStorage {
 
   static Future<bool> userExists(String phone) async {
     final String normalized = phone.trim();
-    if (TestAccountFeature.treatAsRegistered(normalized)) return true;
+    if (await shouldApplyTestAccountPreset(normalized)) return true;
     final List<LocalAuthUser> users = await loadUsers();
     return _findByPhone(users, normalized) != null;
   }
@@ -194,5 +233,51 @@ class LocalAuthStorage {
         await file.delete();
       }
     } catch (_) {}
+  }
+
+  static Future<bool> deleteUserByPhone(String phone) async {
+    final String normalized = phone.trim();
+    if (normalized.isEmpty) return false;
+
+    final bool isTestPhone = TestAccountFeature.isTestPhone(normalized);
+    if (isTestPhone) {
+      await _setBuiltInTestAccountDisabled(true);
+    }
+
+    final List<LocalAuthUser> users = await loadUsers();
+    final int index = users.indexWhere(
+      (LocalAuthUser user) => user.phone == normalized,
+    );
+    if (index >= 0) {
+      users.removeAt(index);
+      await _saveUsers(users);
+      return true;
+    }
+    return isTestPhone;
+  }
+
+  static Future<void> _deleteDataFile(String fileName) async {
+    try {
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final File file = File('${dir.path}/$fileName');
+      if (file.existsSync()) {
+        await file.delete();
+      }
+    } catch (_) {}
+  }
+
+  static Future<bool> deleteCurrentAccountAndLocalData() async {
+    final String? phone = await loadLoginPhone();
+    bool deleted = false;
+    if (phone != null) {
+      deleted = await deleteUserByPhone(phone);
+    }
+
+    await clearLoginSession();
+    await _deleteDataFile('conversations.json');
+    await _deleteDataFile('tags.json');
+    await _deleteDataFile('model_configs.json');
+
+    return deleted;
   }
 }

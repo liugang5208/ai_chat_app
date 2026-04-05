@@ -4,6 +4,7 @@ import 'models/chat_config.dart';
 import 'models/tag_item.dart';
 import 'models/vendor_profile.dart';
 import 'app_state.dart';
+import 'config/app_branding.dart';
 import 'storage/conversation_storage.dart';
 import 'storage/tag_storage.dart';
 import 'storage/model_config_storage.dart';
@@ -31,17 +32,26 @@ void main() async {
   final (:List<Conversation> conversations, :int nextConvId, :int nextMsgId) =
       await ConversationStorage.load();
   final String? loginPhone = await LocalAuthStorage.loadLoginPhone();
+  final bool shouldApplyTestPreset = loginPhone != null
+      ? await LocalAuthStorage.shouldApplyTestAccountPreset(loginPhone)
+      : false;
   final ({
     Map<String, ChatConfig> configs,
     String? activeVendor,
     List<VendorProfile> vendors,
   })
-  patchedModelConfig = TestAccountFeature.applyPresetForLoginPhone(
-    loginPhone: loginPhone,
-    configs: initialConfigs,
-    activeVendor: initialActiveVendor,
-    vendors: initialVendors,
-  );
+  patchedModelConfig = shouldApplyTestPreset
+      ? TestAccountFeature.applyPresetForLoginPhone(
+          loginPhone: loginPhone,
+          configs: initialConfigs,
+          activeVendor: initialActiveVendor,
+          vendors: initialVendors,
+        )
+      : (
+          configs: Map<String, ChatConfig>.from(initialConfigs),
+          activeVendor: initialActiveVendor,
+          vendors: List<VendorProfile>.from(initialVendors),
+        );
   initialConfigs = patchedModelConfig.configs;
   initialActiveVendor = patchedModelConfig.activeVendor;
   initialVendors = patchedModelConfig.vendors;
@@ -95,7 +105,7 @@ class MyApp extends StatelessWidget {
         nextMsgId: initialNextMsgId,
       ),
       child: MaterialApp(
-        title: 'AI Chat App',
+        title: AppBranding.appName,
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4C84FF)),

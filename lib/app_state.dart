@@ -526,4 +526,43 @@ class AppState extends ChangeNotifier {
   void saveConversations() {
     ConversationStorage.save(conversations, _nextConvId, _nextMsgId);
   }
+
+  Future<void> reloadAllFromStorage() async {
+    final ({List<Conversation> conversations, int nextConvId, int nextMsgId})
+    loadedConversations = await ConversationStorage.load();
+    final List<TagItem> loadedTags = await TagStorage.load();
+    final ({
+      Map<String, ChatConfig> configs,
+      String? activeVendor,
+      List<VendorProfile> vendors,
+    })
+    loadedModelConfig = await ModelConfigStorage.load();
+
+    _nextConvId = loadedConversations.nextConvId;
+    _nextMsgId = loadedConversations.nextMsgId;
+    conversations
+      ..clear()
+      ..addAll(loadedConversations.conversations);
+    tags
+      ..clear()
+      ..addAll(loadedTags);
+    modelConfigs
+      ..clear()
+      ..addAll(loadedModelConfig.configs);
+    activeVendor = loadedModelConfig.activeVendor;
+    vendorProfiles
+      ..clear()
+      ..addAll(loadedModelConfig.vendors);
+    knowledgeFolders
+      ..clear()
+      ..add(
+        KnowledgeFolder(
+          name: '默认',
+          files: _seedFiles(),
+          subdirectories: <TagItem>[],
+        ),
+      );
+
+    notifyListeners();
+  }
 }

@@ -469,6 +469,13 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                         conversation.id,
                         message,
                       );
+                final VoidCallback? onUserMessageAction = fromUser
+                    ? () => _onLongPressAssistantMessage(
+                        app,
+                        conversation.id,
+                        message,
+                      )
+                    : null;
                 final Color bubbleColor = fromUser
                     ? const Color(0xFF4C84FF)
                     : const Color(0xFFF5F6FA);
@@ -520,169 +527,179 @@ class _ChatPageState extends State<ChatPage> with WidgetsBindingObserver {
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.68,
                           ),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 9,
-                            ),
-                            decoration: BoxDecoration(
-                              color: bubbleColor,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                if (!fromUser &&
-                                    message.id == _streamingMsgId &&
-                                    message.text.isEmpty)
-                                  const ThinkingDots()
-                                else
-                                  Builder(
-                                    builder: (BuildContext innerContext) {
-                                      final Widget md = MarkdownBody(
-                                        data: message.text,
-                                        selectable: false,
-                                        shrinkWrap: true,
-                                        styleSheet: MarkdownStyleSheet(
-                                          p: messageTextStyle,
-                                          h1: messageTextStyle.copyWith(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w700,
-                                            height: 1.5,
-                                          ),
-                                          h2: messageTextStyle.copyWith(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w700,
-                                            height: 1.5,
-                                          ),
-                                          h3: messageTextStyle.copyWith(
-                                            fontSize: 17,
-                                            fontWeight: FontWeight.w600,
-                                            height: 1.5,
-                                          ),
-                                          listBullet: messageTextStyle,
-                                          strong: messageTextStyle.copyWith(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                          em: messageTextStyle.copyWith(
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                          blockquote: messageTextStyle.copyWith(
-                                            color: const Color(0xFF374151),
-                                          ),
-                                          code: messageTextStyle.copyWith(
-                                            fontFamily: 'Menlo',
-                                            fontFamilyFallback: const <String>[
-                                              'Monaco',
-                                              'Consolas',
-                                            ],
-                                            fontSize: 14,
-                                            height: 1.5,
-                                          ),
-                                          codeblockPadding:
-                                              const EdgeInsets.all(10),
-                                          codeblockDecoration: BoxDecoration(
-                                            color: const Color(0xFFEFF2F7),
-                                            borderRadius: BorderRadius.circular(
-                                              6,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onLongPress: onUserMessageAction,
+                            onDoubleTap: onUserMessageAction,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 9,
+                              ),
+                              decoration: BoxDecoration(
+                                color: bubbleColor,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  if (!fromUser &&
+                                      message.id == _streamingMsgId &&
+                                      message.text.isEmpty)
+                                    const ThinkingDots()
+                                  else
+                                    Builder(
+                                      builder: (BuildContext innerContext) {
+                                        final Widget md = MarkdownBody(
+                                          data: message.text,
+                                          selectable: false,
+                                          shrinkWrap: true,
+                                          styleSheet: MarkdownStyleSheet(
+                                            p: messageTextStyle,
+                                            h1: messageTextStyle.copyWith(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w700,
+                                              height: 1.5,
                                             ),
-                                          ),
-                                          horizontalRuleDecoration:
-                                              const BoxDecoration(
-                                                border: Border(
-                                                  top: BorderSide(
-                                                    width: 1,
-                                                    color: Color(0xFFD1D5DB),
+                                            h2: messageTextStyle.copyWith(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w700,
+                                              height: 1.5,
+                                            ),
+                                            h3: messageTextStyle.copyWith(
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w600,
+                                              height: 1.5,
+                                            ),
+                                            listBullet: messageTextStyle,
+                                            strong: messageTextStyle.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                            em: messageTextStyle.copyWith(
+                                              fontStyle: FontStyle.italic,
+                                            ),
+                                            blockquote: messageTextStyle
+                                                .copyWith(
+                                                  color: const Color(
+                                                    0xFF374151,
                                                   ),
                                                 ),
-                                              ),
-                                        ),
-                                      );
-                                      if (fromUser) return md;
-                                      final GlobalKey selectionContentKey =
-                                          GlobalKey();
-                                      return Stack(
-                                        children: <Widget>[
-                                          SelectionArea(
-                                            onSelectionChanged: (content) {
-                                              final _SelectionExpansionResult
-                                              expansion = _expandSelectedText(
-                                                sourceText: message.text,
-                                                selectedText:
-                                                    content?.plainText ?? '',
-                                              );
-                                              _selectedText =
-                                                  expansion.expandedText;
-                                              if (!_isProgrammaticSelectionAdjusting &&
-                                                  expansion
-                                                      .shouldExpandHighlight) {
-                                                _expandSelectionHighlight(
-                                                  selectionContext:
-                                                      selectionContentKey
-                                                          .currentContext,
-                                                  expandLeft:
-                                                      expansion.expandLeft,
-                                                  expandRight:
-                                                      expansion.expandRight,
-                                                );
-                                              }
-                                            },
-                                            contextMenuBuilder:
-                                                (
-                                                  BuildContext menuContext,
-                                                  SelectableRegionState
-                                                  selectableRegionState,
-                                                ) {
-                                                  return _buildSelectionToolbar(
-                                                    menuContext,
-                                                    selectableRegionState,
-                                                  );
-                                                },
-                                            child: KeyedSubtree(
-                                              key: selectionContentKey,
-                                              child: md,
+                                            code: messageTextStyle.copyWith(
+                                              fontFamily: 'Menlo',
+                                              fontFamilyFallback:
+                                                  const <String>[
+                                                    'Monaco',
+                                                    'Consolas',
+                                                  ],
+                                              fontSize: 14,
+                                              height: 1.5,
                                             ),
-                                          ),
-                                          Positioned.fill(
-                                            child: GestureDetector(
-                                              behavior:
-                                                  HitTestBehavior.translucent,
-                                              onLongPress: onAssistantLongPress,
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                if (message.tags.isNotEmpty) ...<Widget>[
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    spacing: 6,
-                                    children: message.tags
-                                        .map(
-                                          (String tag) => Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 2,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFE9F1FF),
+                                            codeblockPadding:
+                                                const EdgeInsets.all(10),
+                                            codeblockDecoration: BoxDecoration(
+                                              color: const Color(0xFFEFF2F7),
                                               borderRadius:
-                                                  BorderRadius.circular(10),
+                                                  BorderRadius.circular(6),
                                             ),
-                                            child: Text(
-                                              tag,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: Color(0xFF4C84FF),
+                                            horizontalRuleDecoration:
+                                                const BoxDecoration(
+                                                  border: Border(
+                                                    top: BorderSide(
+                                                      width: 1,
+                                                      color: Color(0xFFD1D5DB),
+                                                    ),
+                                                  ),
+                                                ),
+                                          ),
+                                        );
+                                        if (fromUser) return md;
+                                        final GlobalKey selectionContentKey =
+                                            GlobalKey();
+                                        return Stack(
+                                          children: <Widget>[
+                                            SelectionArea(
+                                              onSelectionChanged: (content) {
+                                                final _SelectionExpansionResult
+                                                expansion = _expandSelectedText(
+                                                  sourceText: message.text,
+                                                  selectedText:
+                                                      content?.plainText ?? '',
+                                                );
+                                                _selectedText =
+                                                    expansion.expandedText;
+                                                if (!_isProgrammaticSelectionAdjusting &&
+                                                    expansion
+                                                        .shouldExpandHighlight) {
+                                                  _expandSelectionHighlight(
+                                                    selectionContext:
+                                                        selectionContentKey
+                                                            .currentContext,
+                                                    expandLeft:
+                                                        expansion.expandLeft,
+                                                    expandRight:
+                                                        expansion.expandRight,
+                                                  );
+                                                }
+                                              },
+                                              contextMenuBuilder:
+                                                  (
+                                                    BuildContext menuContext,
+                                                    SelectableRegionState
+                                                    selectableRegionState,
+                                                  ) {
+                                                    return _buildSelectionToolbar(
+                                                      menuContext,
+                                                      selectableRegionState,
+                                                    );
+                                                  },
+                                              child: KeyedSubtree(
+                                                key: selectionContentKey,
+                                                child: md,
                                               ),
                                             ),
-                                          ),
-                                        )
-                                        .toList(),
-                                  ),
+                                            Positioned.fill(
+                                              child: GestureDetector(
+                                                behavior:
+                                                    HitTestBehavior.translucent,
+                                                onLongPress:
+                                                    onAssistantLongPress,
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  if (message.tags.isNotEmpty) ...<Widget>[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 6,
+                                      children: message.tags
+                                          .map(
+                                            (String tag) => Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 2,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFE9F1FF),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
+                                              ),
+                                              child: Text(
+                                                tag,
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF4C84FF),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                          .toList(),
+                                    ),
+                                  ],
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                         ),

@@ -163,7 +163,8 @@ class _LoginPageState extends State<LoginPage> {
     }
     await LocalAuthStorage.saveLoginSession(phone);
     if (!mounted) return;
-    if (TestAccountFeature.isTestPhone(phone)) {
+    if (await LocalAuthStorage.shouldApplyTestAccountPreset(phone)) {
+      if (!mounted) return;
       TestAccountFeature.applyPresetToAppState(AppStateScope.of(context));
     }
     _goMainPage();
