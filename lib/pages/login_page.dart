@@ -98,6 +98,16 @@ class _LoginPageState extends State<LoginPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  Future<void> _continueAsGuest() async {
+    if (!_agreeProtocol) {
+      _toast('请先阅读并同意服务协议');
+      return;
+    }
+    await LocalAuthStorage.saveGuestSession();
+    if (!mounted) return;
+    _goMainPage();
+  }
+
   Future<void> _sendCode({
     required String scene,
     required TextEditingController phoneCtrl,
@@ -392,6 +402,14 @@ class _LoginPageState extends State<LoginPage> {
         ),
         const SizedBox(height: 16),
         _buildPrimaryButton(text: '登录', onPressed: _loginWithPassword),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _continueAsGuest,
+          child: const Text(
+            '跳过注册，直接使用',
+            style: TextStyle(color: Color(0xFF4C84FF)),
+          ),
+        ),
         const SizedBox(height: 12),
         Align(
           alignment: Alignment.centerRight,
@@ -454,6 +472,14 @@ class _LoginPageState extends State<LoginPage> {
         ),
         const SizedBox(height: 16),
         _buildPrimaryButton(text: '注册', onPressed: _register),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _continueAsGuest,
+          child: const Text(
+            '跳过注册，直接使用',
+            style: TextStyle(color: Color(0xFF4C84FF)),
+          ),
+        ),
       ],
     );
   }

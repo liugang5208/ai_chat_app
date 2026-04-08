@@ -39,6 +39,7 @@ class LocalAuthUser {
 
 class LocalAuthStorage {
   static final Random _random = Random.secure();
+  static const String guestSessionPhone = '__guest__';
 
   static Future<File> _file() async {
     final Directory dir = await getApplicationDocumentsDirectory();
@@ -81,6 +82,7 @@ class LocalAuthStorage {
 
   static Future<bool> shouldApplyTestAccountPreset(String phone) async {
     final String normalized = phone.trim();
+    if (isGuestPhone(normalized)) return false;
     if (!TestAccountFeature.isTestPhone(normalized)) return false;
     return !(await _isBuiltInTestAccountDisabled());
   }
@@ -210,6 +212,14 @@ class LocalAuthStorage {
     );
   }
 
+  static Future<void> saveGuestSession() async {
+    await saveLoginSession(guestSessionPhone);
+  }
+
+  static bool isGuestPhone(String phone) {
+    return phone.trim() == guestSessionPhone;
+  }
+
   static Future<String?> loadLoginPhone() async {
     try {
       final File file = await _sessionFile();
@@ -218,6 +228,7 @@ class LocalAuthStorage {
           jsonDecode(await file.readAsString()) as Map<String, dynamic>;
       final String phone = (data['phone'] as String? ?? '').trim();
       if (phone.isEmpty) return null;
+      if (isGuestPhone(phone)) return phone;
       final bool exists = await userExists(phone);
       if (!exists) return null;
       return phone;
